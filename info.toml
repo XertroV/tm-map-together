@@ -1,0 +1,9 @@
+[meta]
+name     = "Map Together"
+author   = "XertroV"
+category = "Map Editor"
+version  = "0.1.0"
+siteid   = 521
+
+[script]
+optional_dependencies = ["Editor", "editor"]
