@@ -17,7 +17,7 @@ void AuthLoop() {
 }
 
 const string CheckTokenUpdate() {
-    if (g_opAuthToken == "" || lastAuthTime == 0 || (Time::Now - lastAuthTime) > (50 * 60 * 1000)) {
+    if (!HasAuthToken()) {
         try {
             auto task = Auth::GetToken();
             while (!task.Finished()) yield();
@@ -34,4 +34,8 @@ const string CheckTokenUpdate() {
 
 const string GetAuthToken() {
     return CheckTokenUpdate();
+}
+
+bool HasAuthToken() {
+    return g_opAuthToken != "" && lastAuthTime > 0 && (Time::Now - lastAuthTime) < (3 * 60 * 1000);
 }

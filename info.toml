@@ -7,3 +7,5 @@ siteid   = 521
 
 [script]
 optional_dependencies = ["Editor", "editor"]
+
+timeout = 7500
