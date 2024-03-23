@@ -110,7 +110,7 @@ class MapTogetherConnection {
 
     protected void InitSock() {
         string op_token = GetAuthToken();
-        trace('token: ' + op_token);
+        dev_trace('token: ' + op_token);
         @this.socket = Net::Socket();
         uint startTime = Time::Now;
         auto timeoutAt = Time::Now + 7500;
@@ -244,38 +244,39 @@ class MapTogetherConnection {
         }
     }
 
-    MTUpdate@[]@ ReadUpdates(uint max) {
+    protected MTUpdate@[]@ ReadUpdates(uint max) {
         if (socket is null) return null;
         if (socket.Available() < 1) return {};
         MTUpdate@[] updates;
+        uint start = Time::Now;
         MTUpdate@ next = ReadMTUpdateMsg(socket);
         uint count = 0;
         while (next !is null && count < max) {
-            trace('read update: ' + count);
+            dev_trace('read update: ' + count);
             if (ignorePlace > 0 && next.ty == MTUpdateTy::Place) {
                 ignorePlace--;
             } else if (ignorePlaceSkins > 0 && next.ty == MTUpdateTy::SetSkin) {
                 ignorePlaceSkins--;
             } else if (next.ty == MTUpdateTy::PlayerJoin) {
-                auto join = cast<PlayerJoinUpdate>(next);
-                print('Player joined: ' + join.playerName);
-                AddPlayer(PlayerInRoom(join.playerName, next.meta.playerId, next.meta.timestamp));
+                next.Apply(null);
             } else if (next.ty == MTUpdateTy::PlayerLeave) {
-                auto leave = cast<PlayerLeaveUpdate>(next);
-                print('Player left: ' + leave.playerName);
-                RemovePlayer(next.meta.playerId);
+                next.Apply(null);
             } else if (next.ty == MTUpdateTy::PlayerCamCursor) {
-                UpdatePlayerCamCursor(cast<PlayerCamCursor>(next));
+                next.Apply(null);
             } else if (next.ty == MTUpdateTy::VehiclePos) {
-                UpdatePlayerVehiclePos(cast<VehiclePos>(next));
+                next.Apply(null);
             } else {
                 updates.InsertLast(next);
             }
             @next = ReadMTUpdateMsg(socket);
             count++;
+            if (Time::Now - start > 2) {
+                dev_trace('breaking read loop due to yield');
+                break;
+            }
         }
-        trace('finished reading: ' + updates.Length);
-        trace('remaining bytes: ' + socket.Available());
+        dev_trace('finished reading: ' + updates.Length);
+        dev_trace('remaining bytes: ' + socket.Available());
         return updates;
     }
 
@@ -412,7 +413,10 @@ MTUpdate@ ReadMTUpdateMsg(Net::Socket@ socket) {
     auto ty = MTUpdateTy(socket.ReadUint8());
     auto len = socket.ReadUint32();
     auto avail = socket.Available();
-    while (socket.Available() < len) yield();
+    while (socket.Available() < len) {
+        dev_trace("Waiting for more bytes to read update: " + len + "; available: " + socket.Available() + "; start_avail: " + start_avail + "; ty: " + ty);
+        yield();
+    }
     avail = socket.Available();
     dev_trace("!!!! Read update ("+tostring(ty)+") len: " + Text::Format("0x%08x", len) + "; available: " + socket.Available());
     if (socket.Available() < int(len)) {
@@ -420,18 +424,21 @@ MTUpdate@ ReadMTUpdateMsg(Net::Socket@ socket) {
     }
     MTUpdate@ update;
     if (len > 0) {
-        while (socket.Available() < len) yield();
+        while (socket.Available() < len) {
+            trace("(if len > 0) Waiting for more bytes to read update: " + len + "; available: " + socket.Available());
+            yield();
+        }
         dev_trace("Reading socket into buf, len: " + len + "; available: " + socket.Available());
         auto buf = ReadBufFromSocket(socket, len);
         if (buf.GetSize() != len) {
-            warn("ReadMTUpdateMsg: Read wrong number of bytes: Expected: " + len + "; Read: " + int32(buf.GetSize()));
+            warn("ReadMTUpdateMsg1: Read wrong number of bytes: Expected: " + len + "; Read: " + int32(buf.GetSize()));
         }
         dev_trace("Buf to update now");
         @update = BufToMTUpdate(ty, buf);
         dev_trace("Got update");
     }
-    if (avail - socket.Available() != int(len)) {
-        warn("ReadMTUpdateMsg: Read wrong number of bytes: Expected: " + len + "; Read: " + (avail - socket.Available()));
+    if (avail - socket.Available() > int(len)) {
+        warn("ReadMTUpdateMsg2: Read wrong number of bytes: Expected: " + len + "; before - after available: " + (avail - socket.Available()));
     }
     dev_trace("reading msg tail");
     // trace('remaining before meta: ' + socket.Available());
@@ -439,12 +446,15 @@ MTUpdate@ ReadMTUpdateMsg(Net::Socket@ socket) {
     auto meta = ReadMsgTail(socket);
     // trace('remaining after meta: ' + socket.Available());
     // trace('meta.playerId: ' + meta.playerId);
-    trace('meta.timestamp: ' + Text::FormatPointer(meta.timestamp));
+    dev_trace('meta.timestamp: ' + Text::FormatPointer(meta.timestamp));
     if (update is null) {
         warn("Failed to read update from server");
         return null;
     }
     @update.meta = meta;
+    if (update.ty != ty) {
+        warn("Mismatched update type: " + tostring(update.ty) + " != " + tostring(ty));
+    }
     return update;
 }
 
@@ -521,7 +531,7 @@ MTUpdate@ PlayerLeaveUpdateFromBuf(MemoryBuffer@ buf) {
 }
 
 MemoryBuffer@ ReadBufFromSocket(Net::Socket@ socket, uint32 len) {
-    if (len > 10000000) throw('bad length!');
+    if (len > 10000000) throw('bad msg length! > 10MB');
     auto buf = MemoryBuffer(len);
     uint count = 0;
     // uint len8Bytes = len - (len % 8);
@@ -664,10 +674,10 @@ class PlayerInRoom {
             UI::Text("ID: " + id);
             UI::Text("Joined: " + Time::FormatString("%Y-%m-%d %H:%M:%S", joinTime / 1000));
             UI::Text("Last Update: " + tostring(lastUpdate));
-            if (lastUpdate == PlayerUpdateTy::Cursor) {
                 lastCamCursor.DrawUI();
-            } else {
                 lastVehiclePos.DrawUI();
+            if (lastUpdate == PlayerUpdateTy::Cursor) {
+            } else {
             }
             UI::TreePop();
         }

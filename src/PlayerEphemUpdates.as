@@ -149,9 +149,12 @@ class VehiclePos : MTUpdate {
     iso4 mat;
     vec3 vel;
 
-    VehiclePos() {}
+    VehiclePos() {
+        ty = MTUpdateTy::VehiclePos;
+    }
 
     VehiclePos(MemoryBuffer@ buf) {
+        ty = MTUpdateTy::VehiclePos;
         ReadFromBuf(buf);
     }
 

@@ -40,18 +40,18 @@ namespace Editor {
         }
     }
 
-    void ReadIntoPendingMessagesWithDiscard() {
-        if (g_MTConn is null) return;
-        auto updates = g_MTConn.ReadUpdates(50);
-        if (updates is null) return;
-        for (uint i = 0; i < updates.Length; i++) {
-            auto ty = updates[i].ty;
-            if (ty == MTUpdateTy::VehiclePos || ty == MTUpdateTy::PlayerCamCursor) {
-                continue;
-            }
-            pendingUpdates.InsertLast(updates[i]);
-        }
-    }
+    // void ReadIntoPendingMessagesWithDiscard() {
+    //     if (g_MTConn is null) return;
+    //     auto updates = g_MTConn.ReadUpdates(50);
+    //     if (updates is null) return;
+    //     for (uint i = 0; i < updates.Length; i++) {
+    //         auto ty = updates[i].ty;
+    //         if (ty == MTUpdateTy::VehiclePos || ty == MTUpdateTy::PlayerCamCursor) {
+    //             continue;
+    //         }
+    //         pendingUpdates.InsertLast(updates[i]);
+    //     }
+    // }
 
     void EditorFeedGen_Loop() {
         ResetOnEnterEditor();
@@ -154,7 +154,7 @@ namespace Editor {
                 bool autosave = false;
                 for (uint i = 0; i < pendingUpdates.Length; i++) {
                     autosave = pendingUpdates[i].Apply(editor) || autosave;
-                    trace("!!!!!!!!!!!!!!!!!!           applied pending update: " + i);
+                    trace("!!!!!!!!!!!!!!!!!!    "+tostring(pendingUpdates[i].ty)+"       applied pending update: " + i);
                 }
                 pendingUpdates.RemoveRange(0, pendingUpdates.Length);
 
