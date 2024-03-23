@@ -14,14 +14,18 @@ GL HF
 
 
 todo:
-- block/prevent undo redo
-
-- detect test mode and session, only update after
-- add server choice
-- svr: remove players
-- svr: parallel reads / per player
+- [x] block/prevent undo redo
+- [x] detect test mode and session, only update after
+- [x] add server choice
+- [x] svr: remove players
+- [x] svr: parallel reads / per player
 - sync period where inputs are disabled
 -
+- send custom items
+- wait for blocks when entering editor mb?
+- cursor and camera of other players
+
+- deleting macroblock crashed game??
 
 # rules for mapping
 

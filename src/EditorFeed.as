@@ -11,11 +11,48 @@ void ResetOnLeaveEditor() {
 
 void ResetOnEnterEditor() {
     cacheAutosavedIx = GetAutosaveStackPos(GetAutosaveStructPtr(GetApp()));
+    // Main loop works. Main is 50/50
+    startnew(Editor::CheckForFreeblockDel).WithRunContext(Meta::RunContext::GameLoop);
 }
 
 uint cacheAutosavedIx = 0;
+MTUpdate@[] pendingUpdates;
 
 namespace Editor {
+    // todo: find run context
+    void CheckForFreeblockDel() {
+        auto app = GetApp();
+        CGameCtnEditorFree@ editor;
+        while (true) {
+            @editor = cast<CGameCtnEditorFree>(GetApp().Editor);
+            if (editor is null && app.Editor is null) break;
+            if (app.CurrentPlayground !is null || cast<CGameCtnEditorFree>(app.Editor) is null || app.LoadProgress.State != NGameLoadProgress::EState::Disabled) {
+                // yield();
+            } else {
+                if (HasPendingFreeBlocksToDelete()) {
+                    Editor_UndoToLastCached(editor);
+                    // this will autosave
+                    RunDeleteFreeBlockDetection();
+                    Editor_CachePosInUndoStack(editor);
+                }
+            }
+            yield();
+        }
+    }
+
+    void ReadIntoPendingMessagesWithDiscard() {
+        if (g_MTConn is null) return;
+        auto updates = g_MTConn.ReadUpdates(50);
+        if (updates is null) return;
+        for (uint i = 0; i < updates.Length; i++) {
+            auto ty = updates[i].ty;
+            if (ty == MTUpdateTy::VehiclePos || ty == MTUpdateTy::PlayerCamCursor) {
+                continue;
+            }
+            pendingUpdates.InsertLast(updates[i]);
+        }
+    }
+
     void EditorFeedGen_Loop() {
         ResetOnEnterEditor();
         UserUndoRedoDisablePatchEnabled = true;
@@ -36,8 +73,16 @@ namespace Editor {
 
         while (app.Editor !is null) {
             while (app.CurrentPlayground !is null || cast<CGameCtnEditorFree>(app.Editor) is null || app.LoadProgress.State != NGameLoadProgress::EState::Disabled) {
+                CheckUpdateVehicle(cast<CSmArenaClient>(app.CurrentPlayground));
+                // g_MTConn.PauseAutoRead = true;
+                // ReadIntoPendingMessagesWithDiscard();
                 yield();
             }
+            // g_MTConn.PauseAutoRead = false;
+            @editor = cast<CGameCtnEditorFree>(app.Editor);
+            CheckUpdateCursor(editor);
+
+
             // by getting the placed/del for this frame at this point, our actions will be cleared before the next frame.
             @placedB = Editor::ThisFrameBlocksPlaced();
             @delB = Editor::ThisFrameBlocksDeleted();
@@ -57,6 +102,10 @@ namespace Editor {
                 @delMb = null;
             }
 
+            if (setSkins.Length > 0) {
+                Notify("Todo: set skins; got len: " + setSkins.Length);
+            }
+
             bool reportUpdates = false;
 
             if (delMb !is null) {
@@ -71,46 +120,60 @@ namespace Editor {
                 reportUpdates = true;
             }
 
+            if (setSkins.Length > 0) {
+                trace("sending set skins");
+                g_MTConn.WriteSetSkins(setSkins);
+                reportUpdates = true;
+            }
+
             // if (!g_MTConn.socket.CanRead()) {
             //     warn('can read: false');
             //     break;
             // }
-            auto updates = g_MTConn.ReadUpdates();
-            if (updates is null) {
-                warn('updates is null');
-                break;
-            }
-            auto nbUpdates = updates.Length;
+            auto nbPendingUpdates = pendingUpdates.Length;
             if (reportUpdates) {
-                trace("nbUpdates: " + nbUpdates);
+                trace("nbPendingUpdates: " + nbPendingUpdates);
             }
 
-            // if (placeMb !is null) {
-            //     // Editor_UndoToLastCached(editor);
-            //     if (!Editor::PlaceMacroblock(placeMb)) {
-            //         NotifyWarning("EditorFeedGen_Loop: Failed to place macroblock");
-            //     }
-            //     // editor.PluginMapType.AutoSave();
-            //     Editor_CachePosInUndoStack(editor);
-            //     trace("(hackplace) cacheAutosavedIx: " + cacheAutosavedIx);
-            //     yield();
-            //     continue;
-            // }
+            if (nbPendingUpdates > 0) {
+                auto pmt = editor.PluginMapType;
 
-            if (nbUpdates > 0) {
-                trace("applying updates: " + nbUpdates);
+                auto _NextMapElemColor = pmt.NextMapElemColor;
+                auto _NextPhaseOffset = pmt.NextItemPhaseOffset;
+                auto _NextMbOffset = pmt.NextMbAdditionalPhaseOffset;
+                auto _NextMbColor = pmt.ForceMacroblockColor;
+
+                pmt.NextMapElemColor = CGameEditorPluginMap::EMapElemColor::Default;
+                pmt.NextItemPhaseOffset = CGameEditorPluginMap::EPhaseOffset::None;
+                pmt.NextMbAdditionalPhaseOffset = CGameEditorPluginMap::EPhaseOffset::None;
+                pmt.ForceMacroblockColor = false;
+
+                trace("applying updates: " + nbPendingUpdates);
                 Editor_UndoToLastCached(editor);
 
-                for (uint i = 0; i < nbUpdates; i++) {
-                    updates[i].Apply(editor);
-                    trace("!!!!!!!!!!!!!!!!!!           applied update: " + i);
+                bool autosave = false;
+                for (uint i = 0; i < pendingUpdates.Length; i++) {
+                    autosave = pendingUpdates[i].Apply(editor) || autosave;
+                    trace("!!!!!!!!!!!!!!!!!!           applied pending update: " + i);
                 }
+                pendingUpdates.RemoveRange(0, pendingUpdates.Length);
 
-                editor.PluginMapType.AutoSave();
-                trace("autosaved");
+                // for (uint i = 0; i < nbUpdates; i++) {
+                //     updates[i].Apply(editor);
+                //     trace("!!!!!!!!!!!!!!!!!!           applied update: " + i);
+                // }
+
+                if (autosave) {
+                    editor.PluginMapType.AutoSave();
+                }
                 // we track this to note player placements. When we get new packets, we undo back to the last cached point, and then apply updates
                 Editor_CachePosInUndoStack(editor);
                 trace("cacheAutosavedIx: " + cacheAutosavedIx);
+
+                pmt.NextMapElemColor = _NextMapElemColor;
+                pmt.NextItemPhaseOffset = _NextPhaseOffset;
+                pmt.NextMbAdditionalPhaseOffset = _NextMbOffset;
+                pmt.ForceMacroblockColor = _NextMbColor;
             }
             yield();
         }
@@ -137,6 +200,27 @@ namespace Editor {
             }
         } else {
             NotifyWarning("EditorFeedGen_Loop: Autosave stack null?! ptr: " + Text::FormatPointer(autosaveStruct));
+        }
+    }
+
+    VehiclePos@ lastVehiclePos = VehiclePos();
+
+    void CheckUpdateVehicle(CSmArenaClient@ pg) {
+        if (pg is null || pg.GameTerminals.Length == 0) return;
+        auto player = cast<CSmPlayer>(pg.GameTerminals[0].ControlledPlayer);
+        if (player is null) return;
+        CSceneVehicleVis@ vis = VehicleState::GetVis(pg.GameScene, player);
+        if (vis is null) return;
+        if (lastVehiclePos.UpdateFromGame(vis)) {
+            g_MTConn.WriteVehiclePos(lastVehiclePos);
+        }
+    }
+
+    PlayerCamCursor@ lastPlayerCamCursor = PlayerCamCursor();
+
+    void CheckUpdateCursor(CGameCtnEditorFree@ editor) {
+        if (lastPlayerCamCursor.UpdateFromGame(editor)) {
+            g_MTConn.WritePlayerCamCursor(lastPlayerCamCursor);
         }
     }
 }

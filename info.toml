@@ -6,6 +6,8 @@ version  = "0.1.0"
 siteid   = 521
 
 [script]
+#__DEFINES__
 optional_dependencies = ["Editor", "editor"]
+dependencies = ["VehicleState", "Camera"]
 
-timeout = 7500
+timeout = 75000

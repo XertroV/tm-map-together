@@ -19,3 +19,5 @@ uint16 GetOffset(CMwNod@ obj, const string &in memberName) {
     if (memberTy.Offset == 0xFFFF) throw("Invalid offset: 0xFFFF");
     return memberTy.Offset;
 }
+
+const uint16 O_VEHICLEVIS_ISO4 = GetOffset("CSceneVehicleVis", "AsyncState") + 8;

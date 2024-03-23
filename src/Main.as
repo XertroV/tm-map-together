@@ -35,6 +35,15 @@ void ConnectToMapTogether() {
 bool g_WindowOpen = true;
 
 
+/** Render function called every frame intended only for menu items in `UI`.
+*/
+void RenderMenu() {
+    if (UI::MenuItem("Map Together", "", g_WindowOpen)) {
+        g_WindowOpen = !g_WindowOpen;
+    }
+}
+
+
 void Render() {
     if (!g_WindowOpen) return;
     if (UI::Begin("Map Together", g_WindowOpen)) {
@@ -91,6 +100,37 @@ void RunTestEppApi() {
 
 bool IS_CONNECTING = false;
 
+enum MTServers {
+    Au, De, Us, Dev, Xert
+}
+
+string ServerToName(MTServers server) {
+    switch (server) {
+        case MTServers::Au: return "Australia";
+        case MTServers::De: return "Germany";
+        case MTServers::Us: return "United States (TODO)";
+        case MTServers::Dev: return "Development";
+        case MTServers::Xert: return "Xert";
+    }
+    return "Unknown";
+}
+
+string ServerToEndpoint(MTServers server) {
+    switch (server) {
+        case MTServers::Au: return "map-together-au.xk.io";
+        case MTServers::De: return "map-together-de.xk.io";
+        case MTServers::Us: return "map-together-us.xk.io";
+        case MTServers::Dev: return "127.0.0.1";
+        case MTServers::Xert: return "203.221.134.67";
+    }
+    NotifyWarning("Unknown server endpoint: " + tostring(server));
+    throw("Unknown server endpoint: " + tostring(server));
+    return "";
+}
+
+[Setting hidden]
+MTServers m_CurrServer = MTServers::Au;
+
 void JoinMapTogetherRoom() {
     string roomId = m_RoomId;
     string password = m_Password;
@@ -98,6 +138,7 @@ void JoinMapTogetherRoom() {
 }
 
 string m_Password;
+[Setting hidden]
 string m_RoomId;
 
 void DrawMainUI_Inner() {
@@ -108,6 +149,26 @@ void DrawMainUI_Inner() {
 
     if (g_MTConn is null) {
         UI::Text("MTConn null.");
+
+        if (UI::BeginCombo("Server", ServerToName(m_CurrServer))) {
+            if (UI::Selectable("Australia", m_CurrServer == MTServers::Au)) {
+                m_CurrServer = MTServers::Au;
+            }
+            if (UI::Selectable("Germany", m_CurrServer == MTServers::De)) {
+                m_CurrServer = MTServers::De;
+            }
+            if (UI::Selectable("United States", m_CurrServer == MTServers::Us)) {
+                m_CurrServer = MTServers::Us;
+            }
+            if (UI::Selectable("Development", m_CurrServer == MTServers::Dev)) {
+                m_CurrServer = MTServers::Dev;
+            }
+            if (UI::Selectable("Xert", m_CurrServer == MTServers::Xert)) {
+                m_CurrServer = MTServers::Xert;
+            }
+            UI::EndCombo();
+        }
+
         if (UI::Button("Connect New")) {
             startnew(ConnectToMapTogether);
         }
@@ -130,9 +191,12 @@ void DrawMainUI_Inner() {
     }
     if (g_MTConn.IsShutdown) {
         UI::Text("Disconnected.");
+        if (UI::Button("Reset")) {
+            @g_MTConn = null;
+        }
         return;
     }
-    UI::Text("Connected.");
+    UI::Text("Connected to " + g_MTConn.remote_domain);
 
     UI::Separator();
 
@@ -149,11 +213,27 @@ void DrawMainUI_Inner() {
 
     UI::Separator();
 
-    UI::AlignTextToFramePadding();
-    UI::Text("Last Macroblock: ");
-    DrawMacroblockDebug("lastPlacedMbDebug", lastPlaced);
-    UI::Text("Last Deleted Macroblock: ");
-    DrawMacroblockDebug("lastDeletedMbDebug", lastDeleted);
+    if (UI::TreeNode("Players ("+g_MTConn.playersInRoom.Length+")###mt-players-main")) {
+        for (uint i = 0; i < g_MTConn.playersInRoom.Length; i++) {
+            g_MTConn.playersInRoom[i].DrawStatusUI();
+        }
+        // UI::Indent();
+        // UI::Unindent();
+        UI::TreePop();
+    }
+
+#if DEV
+    UI::Separator();
+    if (UI::CollapsingHeader("Dev Last MBs")) {
+        UI::Indent();
+        UI::AlignTextToFramePadding();
+        UI::Text("Last Macroblock: ");
+        DrawMacroblockDebug("lastPlacedMbDebug", lastPlaced);
+        UI::Text("Last Deleted Macroblock: ");
+        DrawMacroblockDebug("lastDeletedMbDebug", lastDeleted);
+        UI::Unindent();
+    }
+#endif
 }
 
 
@@ -259,6 +339,12 @@ Editor::MacroblockSpec@ lastDeleted;
 
 
 
+
+void dev_trace(const string &in msg) {
+// #if DEV
+    trace(msg);
+// #endif
+}
 
 
 
