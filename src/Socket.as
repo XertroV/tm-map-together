@@ -537,7 +537,7 @@ MTUpdate@ DeleteUpdateFromBuf(MemoryBuffer@ buf) {
 }
 
 MTUpdate@ SetSkinUpdateFromBuf(MemoryBuffer@ buf) {
-    return MTSetSkinUpdate(Editor::SetSkinSpec(buf));
+    return MTSetSkinUpdate(Editor::SetSkinSpecFromBuf(buf));
 }
 
 MTUpdate@ PlayerLeaveUpdateFromBuf(MemoryBuffer@ buf) {
