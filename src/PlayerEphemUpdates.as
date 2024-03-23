@@ -1,4 +1,4 @@
-class PlayerCamCursor : MTUpdate {
+class PlayerCamCursor : MTUpdate, HasPlayerLabelDraw {
     iso4 cam_matrix;
     vec3 target;
     uint8 edit_mode;
@@ -112,6 +112,45 @@ class PlayerCamCursor : MTUpdate {
         UI::Text("Place mode: " + tostring(pm));
         UI::Text("Cam Pos: " + vec3(cam_matrix.tx, cam_matrix.ty, cam_matrix.tz).ToString());
     }
+
+    vec3 lastScreenTextPos;
+
+    void RenderNvg(const string &in name) {
+        bool isPlacing = this.edit_mode == EditMode::Place;
+        bool isPlacingCoord = this.place_mode == PlaceMode::Block || this.place_mode == PlaceMode::Macroblock || this.place_mode == PlaceMode::GhostBlock;
+        lastScreenTextPos = Camera::ToScreen(target);
+        bool drawCamAndTarget = lastScreenTextPos.z < 0.0;
+        // if ()
+        if (drawCamAndTarget) {
+            DrawPlayerLabel(name, lastScreenTextPos.xy, cWhite, cBlack);
+        }
+    }
+}
+
+mixin class HasPlayerLabelDraw {
+    vec2 textBounds;
+
+    void DrawPlayerLabel(const string &in name, vec2 textPos, const vec4 &in fg, const vec4 &in bg) {
+        auto labelPos = textPos;
+        textPos += vec2(playerLabelBaseHeight * .8, 0);
+        nvg::FontSize(playerLabelBaseHeight);
+        textBounds = nvg::TextBounds(name) + vec2(textPad * 2.0, 0);
+        nvg::Reset();
+        nvg::FontFace(f_Nvg_Montserrat);
+        nvg::BeginPath();
+        nvg::LineCap(nvg::LineCapType::Round);
+        drawLabelBackgroundTagLines(labelPos, playerLabelBaseHeight, stdTriHeight, textBounds);
+        nvg::FillColor(bg);
+        nvg::Fill();
+        nvg::ClosePath();
+
+        nvg::FontSize(playerLabelBaseHeight);
+        nvg::BeginPath();
+        nvg::FillColor(fg);
+        nvg::TextAlign(nvg::Align::Left | nvg::Align::Middle);
+        nvg::Text(textPos, name);
+        nvg::ClosePath();
+    }
 }
 
 enum EditMode {
@@ -145,7 +184,7 @@ enum PlaceMode {
 }
 
 
-class VehiclePos : MTUpdate {
+class VehiclePos : MTUpdate, HasPlayerLabelDraw {
     iso4 mat;
     vec3 vel;
 
@@ -191,6 +230,14 @@ class VehiclePos : MTUpdate {
     void DrawUI() {
         UI::Text("Pos: " + vec3(mat.tx, mat.ty, mat.tz).ToString());
         UI::Text("Vel: " + vel.ToString());
+    }
+
+    void RenderNvg(const string &in name) {
+        auto pos = vec3(mat.tx, mat.ty, mat.tz);
+        auto screenPos = Camera::ToScreen(pos);
+        if (screenPos.z > 0.0) return;
+        DrawPlayerLabel(name, screenPos.xy, cWhite, cRed25);
+        nvgDrawPointCross(screenPos.xy, S_PlayerLabelHeight * .5, cLimeGreen);
     }
 }
 

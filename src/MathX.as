@@ -49,7 +49,7 @@ namespace MathX {
 
     bool Vec3Eq(vec3 &in a, vec3 &in b) {
         return a.x == b.x && a.y == b.y && a.z == b.z;
-        return (a-b).LengthSquared() < 1e10;
+        // return (a-b).LengthSquared() < 1e10;
     }
 
     bool Nat3Eq(nat3 &in a, nat3 &in b) {

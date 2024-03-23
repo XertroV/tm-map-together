@@ -312,6 +312,20 @@ class MapTogetherConnection {
             }
         }
     }
+
+    void RenderPlayersNvg() {
+        if (!S_RenderPlayersNvg) return;
+        PlayerInRoom@ p;
+        for (uint i = 0; i < playersInRoom.Length; i++) {
+            @p = playersInRoom[i];
+            if (p.isLocal && !S_DrawOwnLabels) continue;
+            if (p.lastUpdate == PlayerUpdateTy::Cursor) {
+                p.lastCamCursor.RenderNvg(p.name);
+            } else if (p.lastUpdate == PlayerUpdateTy::Vehicle) {
+                p.lastVehiclePos.RenderNvg(p.name);
+            }
+        }
+    }
 }
 
 // must match server; u8
@@ -413,7 +427,7 @@ MTUpdate@ ReadMTUpdateMsg(Net::Socket@ socket) {
     auto ty = MTUpdateTy(socket.ReadUint8());
     auto len = socket.ReadUint32();
     auto avail = socket.Available();
-    while (socket.Available() < len) {
+    while (socket.Available() < int(len)) {
         dev_trace("Waiting for more bytes to read update: " + len + "; available: " + socket.Available() + "; start_avail: " + start_avail + "; ty: " + ty);
         yield();
     }
@@ -424,7 +438,7 @@ MTUpdate@ ReadMTUpdateMsg(Net::Socket@ socket) {
     }
     MTUpdate@ update;
     if (len > 0) {
-        while (socket.Available() < len) {
+        while (socket.Available() < int(len)) {
             trace("(if len > 0) Waiting for more bytes to read update: " + len + "; available: " + socket.Available());
             yield();
         }
@@ -655,6 +669,7 @@ class PlayerInRoom {
     uint64 joinTime;
     bool isMod;
     bool isAdmin;
+    bool isLocal;
     // bool gameDead = false;
 
     PlayerUpdateTy lastUpdate = PlayerUpdateTy::Cursor;
@@ -667,6 +682,7 @@ class PlayerInRoom {
         this.joinTime = joinTime;
         this.isMod = false;
         this.isAdmin = false;
+        isLocal = name == GetApp().LocalPlayerInfo.Name;
     }
 
     void DrawStatusUI() {
@@ -674,10 +690,10 @@ class PlayerInRoom {
             UI::Text("ID: " + id);
             UI::Text("Joined: " + Time::FormatString("%Y-%m-%d %H:%M:%S", joinTime / 1000));
             UI::Text("Last Update: " + tostring(lastUpdate));
-                lastCamCursor.DrawUI();
-                lastVehiclePos.DrawUI();
             if (lastUpdate == PlayerUpdateTy::Cursor) {
+                lastCamCursor.DrawUI();
             } else {
+                lastVehiclePos.DrawUI();
             }
             UI::TreePop();
         }

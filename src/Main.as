@@ -18,10 +18,13 @@ void Render() {
 
 MapTogetherConnection@ g_MTConn = null;
 
+int f_Nvg_Montserrat;
+
 void Main() {
-    CheckTokenUpdate();
-    Notify("Got token");
+    // CheckTokenUpdate();
+    // Notify("Got token");
     // startnew(ConnectToMapTogether);
+    f_Nvg_Montserrat = nvg::LoadFont("Montserrat-SemiBoldItalic.ttf");
 }
 
 void ConnectToMapTogether() {
@@ -43,8 +46,29 @@ void RenderMenu() {
     }
 }
 
+vec2 g_screen;
+const float referenceHeight = 1440;
+float refScale = 1.0;
+float playerLabelBaseHeight;
+float stdTriHeight;
+float textPad;
+
+void RenderEarly() {
+    g_screen = vec2(Draw::GetWidth(), Draw::GetHeight());
+    refScale = g_screen.y / referenceHeight;
+    playerLabelBaseHeight = S_PlayerLabelHeight * refScale;
+    stdTriHeight = playerLabelBaseHeight * 0.8;
+    textPad = playerLabelBaseHeight * 0.2;
+}
 
 void Render() {
+    if (g_MTConn !is null) {
+        g_MTConn.RenderPlayersNvg();
+    }
+    RenderMainWindow();
+}
+
+void RenderMainWindow() {
     if (!g_WindowOpen) return;
     if (UI::Begin("Map Together", g_WindowOpen)) {
         DrawMainUI_Inner();
@@ -213,6 +237,11 @@ void DrawMainUI_Inner() {
 
     UI::Separator();
 
+    S_RenderPlayersNvg = UI::Checkbox("Render Player Positions", S_RenderPlayersNvg);
+#if DEV
+    S_DrawOwnLabels = UI::Checkbox("Draw Own Labels", S_DrawOwnLabels);
+#endif
+
     if (UI::TreeNode("Players ("+g_MTConn.playersInRoom.Length+")###mt-players-main")) {
         for (uint i = 0; i < g_MTConn.playersInRoom.Length; i++) {
             g_MTConn.playersInRoom[i].DrawStatusUI();
@@ -341,9 +370,9 @@ Editor::MacroblockSpec@ lastDeleted;
 
 
 void dev_trace(const string &in msg) {
-// #if DEV
-    trace(msg);
-// #endif
+#if DEV
+    // trace(msg);
+#endif
 }
 
 
