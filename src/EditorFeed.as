@@ -85,17 +85,20 @@ namespace Editor {
 
         while (app.Editor !is null) {
             while (app.CurrentPlayground !is null || cast<CGameCtnEditorFree>(app.Editor) is null || app.LoadProgress.State != NGameLoadProgress::EState::Disabled) {
+                if (g_MTConn is null) break;
                 CheckUpdateVehicle(cast<CSmArenaClient>(app.CurrentPlayground));
                 // g_MTConn.PauseAutoRead = true;
                 // ReadIntoPendingMessagesWithDiscard();
                 yield();
             }
+
+            if (g_MTConn is null) break;
+
             // g_MTConn.PauseAutoRead = false;
             @editor = cast<CGameCtnEditorFree>(app.Editor);
             if (editor is null) { yield(); continue; }
             if (!editor.PluginMapType.IsEditorReadyForRequest) { yield(); continue; }
             CheckUpdateCursor(editor);
-
 
             // by getting the placed/del for this frame at this point, our actions will be cleared before the next frame.
             @placedB = Editor::ThisFrameBlocksPlaced();
@@ -151,7 +154,7 @@ namespace Editor {
             // auto nbPendingUpdates = pendingUpdates.Length;
             // auto updates = g_MTConn.ReadUpdates(50);
             // if (updates is null) break;
-            auto nbPendingUpdates = g_MTConn.pendingUpdates.Length;
+            auto nbPendingUpdates = Math::Clamp(g_MTConn.pendingUpdates.Length, 0, 50);
             // auto nbUpdates = updates.Length;
             // if (reportUpdates || nbUpdates > 0 || nbPendingUpdates > 0) {
             if (reportUpdates || nbPendingUpdates > 0) {
@@ -176,10 +179,17 @@ namespace Editor {
                 trace("applying updates: " + nbPendingUpdates);
                 Editor_UndoToLastCached(editor);
 
+                uint startPlacing = Time::Now;
+                uint maxPlacingTime = startPlacing + 1500;
                 bool autosave = false;
                 for (uint i = 0; i < nbPendingUpdates; i++) {
                     autosave = g_MTConn.pendingUpdates[i].Apply(editor) || autosave;
                     trace("!!!!!!!!!!!!!!!!!!    "+tostring(g_MTConn.pendingUpdates[i].ty)+"       applied pending update: " + i);
+                    if (maxPlacingTime < Time::Now) {
+                        NotifyWarning("EditorFeedGen_Loop: max placing time exceeded. Breaking.");
+                        nbPendingUpdates = i + 1;
+                        break;
+                    }
                 }
                 g_MTConn.pendingUpdates.RemoveRange(0, nbPendingUpdates);
 

@@ -237,6 +237,7 @@ class MapTogetherConnection {
         while (IsConnecting) yield();
         while (IsConnected) {
             // while (PauseAutoRead) yield();
+            auto msgsRead = 0;
             @next = ReadMTUpdateMsg();
             if (next !is null) {
                 if (ignorePlace > 0 && next.ty == MTUpdateTy::Place) {
@@ -255,6 +256,8 @@ class MapTogetherConnection {
                     // do nothing => drop set skin messages
                 } else {
                     pendingUpdates.InsertLast(next);
+                    msgsRead++;
+                    if (msgsRead > 10) yield();
                 }
             } else {
                 yield();
@@ -267,7 +270,7 @@ class MapTogetherConnection {
             //         pendingUpdates.InsertLast(updates[i]);
             //     }
             // }
-            yield();
+            // yield();
         }
     }
 
@@ -317,7 +320,6 @@ class MapTogetherConnection {
         for (uint i = 0; i < playersInRoom.Length; i++) {
             if (playersInRoom[i].id == playerId) {
                 playersInRoom.RemoveAt(i);
-                return;
             }
         }
     }
@@ -358,6 +360,7 @@ class MapTogetherConnection {
 
 
 
+    const uint meta_bytes = 46;
 
     MTUpdate@ ReadMTUpdateMsg() {
         // while (!socket.CanRead()) {
@@ -369,19 +372,21 @@ class MapTogetherConnection {
         // }
 
         // min size: 17 (u8 + 0u32 + 0u32 + u64)
-        while (socket.Available() < 17) {
+        while (socket.Available() < 16) {
             yield_why("ReadMTUpdateMsg_LT17BytesAvail");
         }
         auto start_avail = socket.Available();
         auto ty = MTUpdateTy(socket.ReadUint8());
+        dev_trace("Reading update type: " + tostring(ty));
         auto len = socket.ReadUint32();
+        dev_trace("Reading update len: " + len);
         if (len > 10000000) {
             NotifyError("Netcode issue detected: msg of len > 10MB. Please reload the plugin. Open a fresh map, and rejoin the room.");
             throw('ReadMTUpdateMsg: bad msg length! > 10MB');
         }
-        while (socket.Available() < int(len)) {
+        while (socket.Available() < int(len + meta_bytes)) {
             dev_trace("Waiting for more bytes to read update: " + len + "; available: " + socket.Available() + "; start_avail: " + start_avail + "; ty: " + ty);
-            yield();
+            yield_why("ReadMTUpdateMsg_WaitForLengthBytes");
         }
         auto avail = socket.Available();
         dev_trace("!!!! Read update ("+tostring(ty)+") len: " + Text::Format("0x%08x", len) + "; available: " + socket.Available());
@@ -390,9 +395,9 @@ class MapTogetherConnection {
         }
         MTUpdate@ update;
         if (len > 0) {
-            while (socket.Available() < int(len)) {
-                trace("(if len > 0) Waiting for more bytes to read update: " + len + "; available: " + socket.Available());
-                yield();
+            while (socket.Available() < int(len + meta_bytes)) {
+                trace("(if len > 0) Waiting for more bytes to read update: " + (len + meta_bytes) + "; available: " + socket.Available());
+                yield_why("ReadMTUpdateMsg_WaitForBytes_2_ExpectNoYield");
             }
             dev_trace("Reading socket into buf, len: " + len + "; available: " + socket.Available());
             auto buf = ReadBufFromSocket(socket, len);
@@ -406,7 +411,7 @@ class MapTogetherConnection {
         if (avail - socket.Available() > int(len)) {
             warn("ReadMTUpdateMsg2: Read wrong number of bytes: Expected: " + len + "; before - after available: " + (avail - socket.Available()));
         }
-        dev_trace("reading msg tail");
+        dev_trace("reading msg tail (46 bytes); avail: " + socket.Available());
         // trace('remaining before meta: ' + socket.Available());
         // trace('reading 8 bytes: ' + Text::FormatPointer(socket.ReadInt64()));
         auto meta = ReadMsgTail(socket);

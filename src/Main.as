@@ -224,6 +224,10 @@ void DrawMainUI_Inner() {
         return;
     }
     if (g_MTConn.hasErrored) {
+        if (UI::Button("Reset")) {
+            g_MTConn.Close();
+            @g_MTConn = null;
+        }
         UI::Text("Error: " + g_MTConn.error);
         return;
     }
@@ -232,10 +236,10 @@ void DrawMainUI_Inner() {
         return;
     }
     if (g_MTConn.IsShutdown) {
-        UI::Text("Disconnected.");
         if (UI::Button("Reset")) {
             @g_MTConn = null;
         }
+        UI::Text("Disconnected.");
         return;
     }
     UI::Text("Connected to " + g_MTConn.remote_domain);
@@ -245,7 +249,7 @@ void DrawMainUI_Inner() {
     CopiableLabeledValue("Room ID", g_MTConn.roomId);
     CopiableLabeledPassword("Password", g_MTConn.roomPassword);
     UI::Text("Action Rate Limit (ms): " + g_MTConn.actionRateLimit);
-
+    UI::Text("Pending Updates: " + g_MTConn.pendingUpdates.Length);
 
     UI::Separator();
 

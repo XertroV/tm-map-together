@@ -20,10 +20,17 @@ todo:
 - [x] svr: remove players
 - [x] svr: parallel reads / per player
 
+
+- game crash on reload or joining room
+
 - sync period where inputs are disabled
+
 - seq numbers on packets
+
 - rejoin from X spot
+
 - separate loop for reading packets
+
 - demarcate packets with start / end
   - 0x2a2a2a5452415453 (b"START***")
   - len: uint32
