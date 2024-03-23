@@ -238,9 +238,9 @@ void DrawMainUI_Inner() {
     UI::Separator();
 
     S_RenderPlayersNvg = UI::Checkbox("Render Player Positions", S_RenderPlayersNvg);
-#if DEV
+// #if DEV
     S_DrawOwnLabels = UI::Checkbox("Draw Own Labels", S_DrawOwnLabels);
-#endif
+// #endif
 
     if (UI::TreeNode("Players ("+g_MTConn.playersInRoom.Length+")###mt-players-main")) {
         for (uint i = 0; i < g_MTConn.playersInRoom.Length; i++) {
@@ -251,10 +251,22 @@ void DrawMainUI_Inner() {
         UI::TreePop();
     }
 
-#if DEV
+// #if DEV
     UI::Separator();
     if (UI::CollapsingHeader("Dev Last MBs")) {
         UI::Indent();
+        UI::AlignTextToFramePadding();
+        if (UI::Button("DEV: Try placing first macroblock again")) {
+            try {
+                auto editor = cast<CGameCtnEditorFree>(GetApp().Editor);
+                Editor::Editor_CachePosInUndoStack(editor);
+                Editor::PlaceMacroblock(g_MTConn.firstMB, true);
+                Editor::Editor_CachePosInUndoStack(editor);
+            } catch {
+                NotifyError("Error: " + getExceptionInfo());
+            }
+        }
+
         UI::AlignTextToFramePadding();
         UI::Text("Last Macroblock: ");
         DrawMacroblockDebug("lastPlacedMbDebug", lastPlaced);
@@ -262,7 +274,7 @@ void DrawMainUI_Inner() {
         DrawMacroblockDebug("lastDeletedMbDebug", lastDeleted);
         UI::Unindent();
     }
-#endif
+// #endif
 }
 
 
@@ -370,9 +382,9 @@ Editor::MacroblockSpec@ lastDeleted;
 
 
 void dev_trace(const string &in msg) {
-#if DEV
-    // trace(msg);
-#endif
+// #if DEV
+    trace(msg);
+// #endif
 }
 
 

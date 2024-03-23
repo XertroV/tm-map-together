@@ -45,10 +45,10 @@ namespace Editor {
         auto updates = g_MTConn.ReadUpdates(50);
         if (updates is null) return;
         for (uint i = 0; i < updates.Length; i++) {
-            auto ty = updates[i].ty;
-            if (ty == MTUpdateTy::VehiclePos || ty == MTUpdateTy::PlayerCamCursor) {
-                continue;
-            }
+            // auto ty = updates[i].ty;
+            // if (ty == MTUpdateTy::VehiclePos || ty == MTUpdateTy::PlayerCamCursor) {
+            //     continue;
+            // }
             pendingUpdates.InsertLast(updates[i]);
         }
     }
@@ -56,6 +56,7 @@ namespace Editor {
     void EditorFeedGen_Loop() {
         ResetOnEnterEditor();
         UserUndoRedoDisablePatchEnabled = true;
+        sleep(200);
 
         CGameCtnApp@ app = GetApp();
         CGameCtnEditorFree@ editor = cast<CGameCtnEditorFree>(app.Editor);
@@ -63,6 +64,15 @@ namespace Editor {
             warn("EditorFeedGen_Loop: Editor is null");
             return;
         }
+        while (!editor.PluginMapType.IsEditorReadyForRequest) yield();
+        @editor = cast<CGameCtnEditorFree>(app.Editor);
+        if (editor is null) {
+            warn("EditorFeedGen_Loop: Editor is null");
+            return;
+        }
+        trace('initial autosave now.');
+        editor.PluginMapType.AutoSave();
+
         const array<BlockSpec@>@ placedB;
         const array<BlockSpec@>@ delB;
         const array<ItemSpec@>@ placedI;
@@ -80,7 +90,8 @@ namespace Editor {
             }
             g_MTConn.PauseAutoRead = false;
             @editor = cast<CGameCtnEditorFree>(app.Editor);
-            if (editor is null) continue;
+            if (editor is null) { yield(); continue; }
+            if (!editor.PluginMapType.IsEditorReadyForRequest) { yield(); continue; }
             CheckUpdateCursor(editor);
 
 
@@ -133,13 +144,14 @@ namespace Editor {
             // }
             // auto nbPendingUpdates = pendingUpdates.Length;
             auto updates = g_MTConn.ReadUpdates(50);
+            if (updates is null) break;
             auto nbPendingUpdates = pendingUpdates.Length;
             auto nbUpdates = updates.Length;
-            if (reportUpdates) {
+            if (reportUpdates || nbUpdates > 0 || nbPendingUpdates > 0) {
                 trace("updates: " +updates.Length+ ", nbPendingUpdates: " + nbPendingUpdates);
             }
 
-            if (nbPendingUpdates > 0) {
+            if (nbPendingUpdates > 0 || nbUpdates > 0) {
                 auto pmt = editor.PluginMapType;
 
                 auto _NextMapElemColor = pmt.NextMapElemColor;
@@ -163,7 +175,7 @@ namespace Editor {
                 pendingUpdates.RemoveRange(0, pendingUpdates.Length);
 
                 for (uint i = 0; i < nbUpdates; i++) {
-                    updates[i].Apply(editor);
+                    autosave = updates[i].Apply(editor) || autosave;
                     trace("!!!!!!!!!!!!!!!!!!           applied update: " + i);
                 }
 
@@ -210,14 +222,18 @@ namespace Editor {
     }
 
     VehiclePos@ lastVehiclePos = VehiclePos();
+    uint lastUpdateVehicleCheck = 0;
+    uint lastUpdateCursorCheck = 0;
 
     void CheckUpdateVehicle(CSmArenaClient@ pg) {
+        if (lastUpdateVehicleCheck + 100 > Time::Now) return;
         if (pg is null || pg.GameTerminals.Length == 0) return;
         auto player = cast<CSmPlayer>(pg.GameTerminals[0].ControlledPlayer);
         if (player is null) return;
         CSceneVehicleVis@ vis = VehicleState::GetVis(pg.GameScene, player);
         if (vis is null) return;
         if (lastVehiclePos.UpdateFromGame(vis)) {
+            lastUpdateVehicleCheck = Time::Now;
             g_MTConn.WriteVehiclePos(lastVehiclePos);
         }
     }
@@ -225,7 +241,9 @@ namespace Editor {
     PlayerCamCursor@ lastPlayerCamCursor = PlayerCamCursor();
 
     void CheckUpdateCursor(CGameCtnEditorFree@ editor) {
+        if (lastUpdateCursorCheck + 1000 > Time::Now) return;
         if (g_MTConn != null && lastPlayerCamCursor.UpdateFromGame(editor)) {
+            lastUpdateCursorCheck = Time::Now;
             g_MTConn.WritePlayerCamCursor(lastPlayerCamCursor);
         }
     }

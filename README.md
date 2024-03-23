@@ -20,6 +20,10 @@ todo:
 - [x] svr: remove players
 - [x] svr: parallel reads / per player
 - sync period where inputs are disabled
+
+- SIGNS FUCK EVERYTHING
+- SnowRoadPillarStriaght
+- RallCastleWallStraightPillar
 -
 - send custom items
 - wait for blocks when entering editor mb?

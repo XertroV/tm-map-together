@@ -10,6 +10,7 @@ class MapTogetherConnection {
     uint actionRateLimit;
 
     PlayerInRoom@[] playersInRoom;
+    Editor::MacroblockSpec@ firstMB;
 
     // create a room
     MapTogetherConnection(const string &in password, uint roomMsBetweenActions = 0) {
@@ -427,6 +428,10 @@ MTUpdate@ ReadMTUpdateMsg(Net::Socket@ socket) {
     auto start_avail = socket.Available();
     auto ty = MTUpdateTy(socket.ReadUint8());
     auto len = socket.ReadUint32();
+    if (len > 10000000) {
+        NotifyError("Netcode issue detected: msg of len > 10MB. Please reload the plugin. Open a fresh map, and rejoin the room.");
+        throw('ReadMTUpdateMsg: bad msg length! > 10MB');
+    }
     auto avail = socket.Available();
     while (socket.Available() < int(len)) {
         dev_trace("Waiting for more bytes to read update: " + len + "; available: " + socket.Available() + "; start_avail: " + start_avail + "; ty: " + ty);
@@ -528,6 +533,9 @@ MTUpdate@ BufToMTUpdate(MTUpdateTy ty, MemoryBuffer@ buf) {
 MTUpdate@ PlaceUpdateFromBuf(MemoryBuffer@ buf) {
     auto mt = Editor::MacroblockSpecFromBuf(buf);
     @lastPlaced = mt;
+    if (g_MTConn !is null && g_MTConn.firstMB is null) {
+        @g_MTConn.firstMB = mt;
+    }
     return MTPlaceUpdate(mt);
 }
 
