@@ -53,13 +53,58 @@ float playerLabelBaseHeight;
 float stdTriHeight;
 float textPad;
 
-void RenderEarly() {
+
+void UpdateGraphicsValues() {
     g_screen = vec2(Draw::GetWidth(), Draw::GetHeight());
     refScale = g_screen.y / referenceHeight;
     playerLabelBaseHeight = S_PlayerLabelHeight * refScale;
     stdTriHeight = playerLabelBaseHeight * 0.8;
     textPad = playerLabelBaseHeight * 0.2;
 }
+
+bool IsInEditor;
+bool IsInSubEditor;
+bool IsTestingOrValidating;
+bool IsLoading;
+bool IsMenuDialogShown;
+ActionMap CurrActionMap;
+
+void RenderEarly() {
+    if (g_MTConn is null) return;
+    UpdateGraphicsValues();
+    auto app = GetApp();
+    if (app.Editor is null) {
+        IsInEditor = false;
+        IsInSubEditor = false;
+        IsTestingOrValidating = false;
+    }
+    IsLoading = app.LoadProgress.State == NGameLoadProgress::EState::Displayed;
+    IsMenuDialogShown = app.BasicDialogs.Dialogs.CurrentFrame !is null;
+    SetCurrActionMap(UI::CurrentActionMap());
+}
+
+void SetCurrActionMap(const string &in actionMap) {
+    if (actionMap == "CtnEditor") {
+        CurrActionMap = ActionMap::CtnEditor;
+    } else if (actionMap == "MenuInputsMap") {
+        CurrActionMap = ActionMap::MenuInputsMap;
+    } else if (actionMap == "SpectatorMap") {
+        CurrActionMap = ActionMap::SpectatorMap;
+    } else if (actionMap == "Vehicle") {
+        CurrActionMap = ActionMap::Vehicle;
+    } else {
+        CurrActionMap = ActionMap::Unknown;
+    }
+}
+
+enum ActionMap {
+    Unknown,
+    CtnEditor,
+    MenuInputsMap,
+    SpectatorMap,
+    Vehicle,
+}
+
 
 void Render() {
     if (g_MTConn !is null) {
@@ -71,10 +116,16 @@ void Render() {
 void RenderMainWindow() {
     if (!g_WindowOpen) return;
     if (UI::Begin("Map Together", g_WindowOpen)) {
-        DrawMainUI_Inner();
-        if (UI::Button("Test E++ api")) {
-            RunTestEppApi();
+        UI::BeginTabBar("mt-main-tabs", UI::TabBarFlags::None);
+        if (UI::BeginTabItem("Main")) {
+            DrawMainUI_Inner();
+            UI::EndTabItem();
         }
+        if (UI::BeginTabItem("Yields")) {
+            DrawYeildReasonUI();
+            UI::EndTabItem();
+        }
+        UI::EndTabBar();
     }
     UI::End();
 }
@@ -87,39 +138,6 @@ void OnDestroyed() {
         @g_MTConn = null;
     }
     UserUndoRedoDisablePatchEnabled = false;
-}
-
-void RunTestEppApi() {
-    trace("Calling: Editor::DeleteBlocksAndItems");
-    Editor::DeleteBlocksAndItems({}, {});
-    trace("Called: Editor::DeleteBlocksAndItems");
-    trace("Calling: Editor::PlaceBlocksAndItems");
-    Editor::PlaceBlocksAndItems({}, {});
-    trace("Called: Editor::PlaceBlocksAndItems");
-    trace("Calling: Editor::DeleteMacroblock");
-    Editor::DeleteMacroblock(null);
-    trace("Called: Editor::DeleteMacroblock");
-    trace("Calling: Editor::PlaceMacroblock");
-    Editor::PlaceMacroblock(null);
-    trace("Called: Editor::PlaceMacroblock");
-    trace("Calling: Editor::GetMapAsMacroblock");
-    auto x = Editor::GetMapAsMacroblock();
-    trace("Called: Editor::GetMapAsMacroblock");
-    trace("Calling: Editor::ThisFrameItemsDeleted");
-    auto y = Editor::ThisFrameItemsDeleted();
-    trace("Called: Editor::ThisFrameItemsDeleted");
-    trace("Calling: Editor::ThisFrameItemsPlaced");
-    auto z = Editor::ThisFrameItemsPlaced();
-    trace("Called: Editor::ThisFrameItemsPlaced");
-    trace("Calling: Editor::ThisFrameSkinsSet");
-    auto a = Editor::ThisFrameSkinsSet();
-    trace("Called: Editor::ThisFrameSkinsSet");
-    trace("Calling: Editor::ThisFrameBlocksPlaced");
-    auto b = Editor::ThisFrameBlocksPlaced();
-    trace("Called: Editor::ThisFrameBlocksPlaced");
-    trace("Calling: Editor::ThisFrameBlocksDeleted");
-    auto c = Editor::ThisFrameBlocksDeleted();
-    trace("Called: Editor::ThisFrameBlocksDeleted");
 }
 
 bool IS_CONNECTING = false;

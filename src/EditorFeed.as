@@ -16,10 +16,10 @@ void ResetOnEnterEditor() {
 }
 
 uint cacheAutosavedIx = 0;
-MTUpdate@[] pendingUpdates;
+// MTUpdate@[] pendingUpdates;
 
 namespace Editor {
-    // todo: find run context
+    // Run Context: MainLoop and GameLoop seem to work
     void CheckForFreeblockDel() {
         auto app = GetApp();
         CGameCtnEditorFree@ editor;
@@ -27,6 +27,7 @@ namespace Editor {
             @editor = cast<CGameCtnEditorFree>(GetApp().Editor);
             if (editor is null && app.Editor is null) break;
             if (app.CurrentPlayground !is null || cast<CGameCtnEditorFree>(app.Editor) is null || app.LoadProgress.State != NGameLoadProgress::EState::Disabled) {
+                // testing or item/mt editor or something
                 // yield();
             } else {
                 if (HasPendingFreeBlocksToDelete()) {
@@ -40,18 +41,18 @@ namespace Editor {
         }
     }
 
-    void ReadIntoPendingMessagesWithDiscard() {
-        if (g_MTConn is null) return;
-        auto updates = g_MTConn.ReadUpdates(50);
-        if (updates is null) return;
-        for (uint i = 0; i < updates.Length; i++) {
-            // auto ty = updates[i].ty;
-            // if (ty == MTUpdateTy::VehiclePos || ty == MTUpdateTy::PlayerCamCursor) {
-            //     continue;
-            // }
-            pendingUpdates.InsertLast(updates[i]);
-        }
-    }
+    // void ReadIntoPendingMessagesWithDiscard() {
+    //     if (g_MTConn is null) return;
+    //     auto updates = g_MTConn.ReadUpdates(50);
+    //     if (updates is null) return;
+    //     for (uint i = 0; i < updates.Length; i++) {
+    //         // auto ty = updates[i].ty;
+    //         // if (ty == MTUpdateTy::VehiclePos || ty == MTUpdateTy::PlayerCamCursor) {
+    //         //     continue;
+    //         // }
+    //         pendingUpdates.InsertLast(updates[i]);
+    //     }
+    // }
 
     void EditorFeedGen_Loop() {
         ResetOnEnterEditor();
@@ -72,6 +73,7 @@ namespace Editor {
         }
         trace('initial autosave now.');
         editor.PluginMapType.AutoSave();
+        yield();
 
         const array<BlockSpec@>@ placedB;
         const array<BlockSpec@>@ delB;
@@ -84,11 +86,11 @@ namespace Editor {
         while (app.Editor !is null) {
             while (app.CurrentPlayground !is null || cast<CGameCtnEditorFree>(app.Editor) is null || app.LoadProgress.State != NGameLoadProgress::EState::Disabled) {
                 CheckUpdateVehicle(cast<CSmArenaClient>(app.CurrentPlayground));
-                g_MTConn.PauseAutoRead = true;
-                ReadIntoPendingMessagesWithDiscard();
+                // g_MTConn.PauseAutoRead = true;
+                // ReadIntoPendingMessagesWithDiscard();
                 yield();
             }
-            g_MTConn.PauseAutoRead = false;
+            // g_MTConn.PauseAutoRead = false;
             @editor = cast<CGameCtnEditorFree>(app.Editor);
             if (editor is null) { yield(); continue; }
             if (!editor.PluginMapType.IsEditorReadyForRequest) { yield(); continue; }
@@ -101,6 +103,9 @@ namespace Editor {
             @placedI = Editor::ThisFrameItemsPlaced();
             @delI = Editor::ThisFrameItemsDeleted();
             @setSkins = Editor::ThisFrameSkinsSet();
+
+            uint origPlacedTotal = placedB.Length + placedI.Length;
+            uint origDelTotal = delB.Length + delI.Length;
 
             if (placedB.Length > 0 || placedI.Length > 0) {
                 @placeMb = Editor::MakeMacroblockSpec(placedB, placedI);
@@ -132,26 +137,30 @@ namespace Editor {
                 reportUpdates = true;
             }
 
-            if (setSkins.Length > 0) {
-                trace("sending set skins");
-                g_MTConn.WriteSetSkins(setSkins);
-                reportUpdates = true;
-            }
+            // ignore set skins for now (infinite loop glitch oops)
+            // if (setSkins.Length > 0) {
+            //     trace("sending set skins");
+            //     g_MTConn.WriteSetSkins(setSkins);
+            //     reportUpdates = true;
+            // }
 
             // if (!g_MTConn.socket.CanRead()) {
             //     warn('can read: false');
             //     break;
             // }
             // auto nbPendingUpdates = pendingUpdates.Length;
-            auto updates = g_MTConn.ReadUpdates(50);
-            if (updates is null) break;
-            auto nbPendingUpdates = pendingUpdates.Length;
-            auto nbUpdates = updates.Length;
-            if (reportUpdates || nbUpdates > 0 || nbPendingUpdates > 0) {
-                trace("updates: " +updates.Length+ ", nbPendingUpdates: " + nbPendingUpdates);
+            // auto updates = g_MTConn.ReadUpdates(50);
+            // if (updates is null) break;
+            auto nbPendingUpdates = g_MTConn.pendingUpdates.Length;
+            // auto nbUpdates = updates.Length;
+            // if (reportUpdates || nbUpdates > 0 || nbPendingUpdates > 0) {
+            if (reportUpdates || nbPendingUpdates > 0) {
+                // trace("updates: " +updates.Length+ ", nbPendingUpdates: " + nbPendingUpdates);
+                trace("nbPendingUpdates: " + nbPendingUpdates);
             }
 
-            if (nbPendingUpdates > 0 || nbUpdates > 0) {
+            // if (nbPendingUpdates > 0 || nbUpdates > 0) {
+            if (nbPendingUpdates > 0) {
                 auto pmt = editor.PluginMapType;
 
                 auto _NextMapElemColor = pmt.NextMapElemColor;
@@ -168,15 +177,24 @@ namespace Editor {
                 Editor_UndoToLastCached(editor);
 
                 bool autosave = false;
-                for (uint i = 0; i < pendingUpdates.Length; i++) {
-                    autosave = pendingUpdates[i].Apply(editor) || autosave;
-                    trace("!!!!!!!!!!!!!!!!!!    "+tostring(pendingUpdates[i].ty)+"       applied pending update: " + i);
+                for (uint i = 0; i < nbPendingUpdates; i++) {
+                    autosave = g_MTConn.pendingUpdates[i].Apply(editor) || autosave;
+                    trace("!!!!!!!!!!!!!!!!!!    "+tostring(g_MTConn.pendingUpdates[i].ty)+"       applied pending update: " + i);
                 }
-                pendingUpdates.RemoveRange(0, pendingUpdates.Length);
+                g_MTConn.pendingUpdates.RemoveRange(0, nbPendingUpdates);
 
-                for (uint i = 0; i < nbUpdates; i++) {
-                    autosave = updates[i].Apply(editor) || autosave;
-                    trace("!!!!!!!!!!!!!!!!!!           applied update: " + i);
+                // for (uint i = 0; i < nbUpdates; i++) {
+                //     autosave = updates[i].Apply(editor) || autosave;
+                //     trace("!!!!!!!!!!!!!!!!!!           applied update: " + i);
+                // }
+
+
+                // uint origPlacedTotal = placedB.Length + placedI.Length;
+                // uint origDelTotal = delB.Length + delI.Length;
+                uint newPlacedTotal = placedB.Length + placedI.Length;
+                uint newDelTotal = delB.Length + delI.Length;
+                if (origPlacedTotal != newPlacedTotal || origDelTotal != newDelTotal) {
+                    Notify("EditorFeedGen_Loop: placed/del changed during update processing. origPlacedTotal: " + origPlacedTotal + ", newPlacedTotal: " + newPlacedTotal + ", origDelTotal: " + origDelTotal + ", newDelTotal: " + newDelTotal);
                 }
 
                 if (autosave) {
@@ -224,9 +242,10 @@ namespace Editor {
     VehiclePos@ lastVehiclePos = VehiclePos();
     uint lastUpdateVehicleCheck = 0;
     uint lastUpdateCursorCheck = 0;
+    uint updateEveryMs = 100;
 
     void CheckUpdateVehicle(CSmArenaClient@ pg) {
-        if (lastUpdateVehicleCheck + 100 > Time::Now) return;
+        if (lastUpdateVehicleCheck + updateEveryMs > Time::Now) return;
         if (pg is null || pg.GameTerminals.Length == 0) return;
         auto player = cast<CSmPlayer>(pg.GameTerminals[0].ControlledPlayer);
         if (player is null) return;
@@ -241,8 +260,8 @@ namespace Editor {
     PlayerCamCursor@ lastPlayerCamCursor = PlayerCamCursor();
 
     void CheckUpdateCursor(CGameCtnEditorFree@ editor) {
-        if (lastUpdateCursorCheck + 1000 > Time::Now) return;
-        if (g_MTConn != null && lastPlayerCamCursor.UpdateFromGame(editor)) {
+        if (lastUpdateCursorCheck + updateEveryMs > Time::Now) return;
+        if (g_MTConn !is null && lastPlayerCamCursor.UpdateFromGame(editor)) {
             lastUpdateCursorCheck = Time::Now;
             g_MTConn.WritePlayerCamCursor(lastPlayerCamCursor);
         }

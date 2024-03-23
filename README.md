@@ -19,11 +19,24 @@ todo:
 - [x] add server choice
 - [x] svr: remove players
 - [x] svr: parallel reads / per player
+
 - sync period where inputs are disabled
+- seq numbers on packets
+- rejoin from X spot
+- separate loop for reading packets
+- demarcate packets with start / end
+  - 0x2a2a2a5452415453 (b"START***")
+  - len: uint32
+  - len: uint32 (repeated for packet framing) & 0xFFFFFF | (ty << 24)
+  -   check len & 0xFFFFFF are eq, and read type
+  - 0x53444e452a2a2a2a (b"****ENDS")
+
 
 - SIGNS FUCK EVERYTHING
 - SnowRoadPillarStriaght
 - RallCastleWallStraightPillar
+
+-
 -
 - send custom items
 - wait for blocks when entering editor mb?

@@ -1,5 +1,5 @@
 class MapTogetherConnection {
-    Net::Socket@ socket;
+    protected Net::Socket@ socket;
     string op_token;
     bool hasErrored = false;
     string error;
@@ -37,7 +37,7 @@ class MapTogetherConnection {
         ExpectRoomDetails();
         dev_trace('Got room details');
         startnew(Editor::EditorFeedGen_Loop);
-        // startnew(CoroutineFunc(this.ReadUpdatesLoop));
+        startnew(CoroutineFunc(this.ReadUpdatesLoop));
         this.SendMapAsMacroblock();
         IS_CONNECTING = false;
     }
@@ -61,7 +61,7 @@ class MapTogetherConnection {
         ExpectOKResp();
         ExpectRoomDetails();
         startnew(Editor::EditorFeedGen_Loop);
-        // startnew(CoroutineFunc(this.ReadUpdatesLoop));
+        startnew(CoroutineFunc(this.ReadUpdatesLoop));
         IS_CONNECTING = false;
     }
 
@@ -228,59 +228,86 @@ class MapTogetherConnection {
         socket.Write(buf, buf.GetSize());
     }
 
+    // not used
     bool PauseAutoRead = false;
+    MTUpdate@[] pendingUpdates;
 
     void ReadUpdatesLoop() {
-        return;
+        MTUpdate@ next;
         while (IsConnecting) yield();
         while (IsConnected) {
-            while (PauseAutoRead) yield();
-            auto updates = ReadUpdates(50);
-            // pendingUpdates
-            if (updates !is null) {
-                for (uint i = 0; i < updates.Length; i++) {
-                    pendingUpdates.InsertLast(updates[i]);
+            // while (PauseAutoRead) yield();
+            @next = ReadMTUpdateMsg();
+            if (next !is null) {
+                if (ignorePlace > 0 && next.ty == MTUpdateTy::Place) {
+                    ignorePlace--;
+                } else if (ignorePlaceSkins > 0 && next.ty == MTUpdateTy::SetSkin) {
+                    ignorePlaceSkins--;
+                } else if (next.ty == MTUpdateTy::PlayerJoin) {
+                    next.Apply(null);
+                } else if (next.ty == MTUpdateTy::PlayerLeave) {
+                    next.Apply(null);
+                } else if (next.ty == MTUpdateTy::PlayerCamCursor) {
+                    next.Apply(null);
+                } else if (next.ty == MTUpdateTy::VehiclePos) {
+                    next.Apply(null);
+                } else if (next.ty == MTUpdateTy::SetSkin) {
+                    // do nothing => drop set skin messages
+                } else {
+                    pendingUpdates.InsertLast(next);
                 }
+            } else {
+                yield();
             }
+
+
+            // // pendingUpdates
+            // if (updates !is null) {
+            //     for (uint i = 0; i < updates.Length; i++) {
+            //         pendingUpdates.InsertLast(updates[i]);
+            //     }
+            // }
             yield();
         }
     }
 
-    MTUpdate@[]@ ReadUpdates(uint max) {
-        if (socket is null) return null;
-        if (socket.Available() < 1) return {};
-        MTUpdate@[] updates;
-        uint start = Time::Now;
-        MTUpdate@ next = ReadMTUpdateMsg(socket);
-        uint count = 0;
-        while (next !is null && count < max) {
-            dev_trace('read update: ' + count);
-            if (ignorePlace > 0 && next.ty == MTUpdateTy::Place) {
-                ignorePlace--;
-            } else if (ignorePlaceSkins > 0 && next.ty == MTUpdateTy::SetSkin) {
-                ignorePlaceSkins--;
-            } else if (next.ty == MTUpdateTy::PlayerJoin) {
-                next.Apply(null);
-            } else if (next.ty == MTUpdateTy::PlayerLeave) {
-                next.Apply(null);
-            } else if (next.ty == MTUpdateTy::PlayerCamCursor) {
-                next.Apply(null);
-            } else if (next.ty == MTUpdateTy::VehiclePos) {
-                next.Apply(null);
-            } else {
-                updates.InsertLast(next);
-            }
-            @next = ReadMTUpdateMsg(socket);
-            count++;
-            if (Time::Now - start > 2) {
-                dev_trace('breaking read loop due to yield');
-                break;
-            }
-        }
-        dev_trace('finished reading: ' + updates.Length);
-        dev_trace('remaining bytes: ' + socket.Available());
-        return updates;
-    }
+    // protected MTUpdate@[]@ ReadUpdates(uint max) {
+    //     if (socket is null) return null;
+    //     if (socket.Available() < 1) return {};
+    //     MTUpdate@[] updates;
+    //     uint start = Time::Now;
+    //     MTUpdate@ next = ReadMTUpdateMsg(socket);
+    //     uint count = 0;
+    //     while (next !is null && count < max) {
+    //         dev_trace('read update: ' + count);
+    //         if (ignorePlace > 0 && next.ty == MTUpdateTy::Place) {
+    //             ignorePlace--;
+    //         } else if (ignorePlaceSkins > 0 && next.ty == MTUpdateTy::SetSkin) {
+    //             ignorePlaceSkins--;
+    //         } else if (next.ty == MTUpdateTy::PlayerJoin) {
+    //             next.Apply(null);
+    //         } else if (next.ty == MTUpdateTy::PlayerLeave) {
+    //             next.Apply(null);
+    //         } else if (next.ty == MTUpdateTy::PlayerCamCursor) {
+    //             next.Apply(null);
+    //         } else if (next.ty == MTUpdateTy::VehiclePos) {
+    //             next.Apply(null);
+    //         } else if (next.ty == MTUpdateTy::SetSkin) {
+    //             // do nothing => drop set skin messages
+    //         } else {
+    //             updates.InsertLast(next);
+    //         }
+    //         @next = ReadMTUpdateMsg(socket);
+    //         count++;
+    //         if (Time::Now - start > 2) {
+    //             dev_trace('breaking read loop due to yield');
+    //             break;
+    //         }
+    //     }
+    //     dev_trace('finished reading: ' + updates.Length);
+    //     dev_trace('remaining bytes: ' + socket.Available());
+    //     return updates;
+    // }
 
     void AddPlayer(PlayerInRoom@ player) {
         playersInRoom.InsertLast(player);
@@ -328,6 +355,75 @@ class MapTogetherConnection {
             }
         }
     }
+
+
+
+
+    MTUpdate@ ReadMTUpdateMsg() {
+        // while (!socket.CanRead()) {
+        //     yield_why("ReadMTUpdateMsg_SocRead");
+        // }
+        // auto UpdateHeader = ReadUpdateMsgHeader();
+        // while (socket.Available() < UpdateHeader.PayloadLen || !socket.CanRead()) {
+        //     yield_why("ReadMTUpdateMsg_DL_Payload");
+        // }
+
+        // min size: 17 (u8 + 0u32 + 0u32 + u64)
+        while (socket.Available() < 17) {
+            yield_why("ReadMTUpdateMsg_LT17BytesAvail");
+        }
+        auto start_avail = socket.Available();
+        auto ty = MTUpdateTy(socket.ReadUint8());
+        auto len = socket.ReadUint32();
+        if (len > 10000000) {
+            NotifyError("Netcode issue detected: msg of len > 10MB. Please reload the plugin. Open a fresh map, and rejoin the room.");
+            throw('ReadMTUpdateMsg: bad msg length! > 10MB');
+        }
+        while (socket.Available() < int(len)) {
+            dev_trace("Waiting for more bytes to read update: " + len + "; available: " + socket.Available() + "; start_avail: " + start_avail + "; ty: " + ty);
+            yield();
+        }
+        auto avail = socket.Available();
+        dev_trace("!!!! Read update ("+tostring(ty)+") len: " + Text::Format("0x%08x", len) + "; available: " + socket.Available());
+        if (socket.Available() < int(len)) {
+            NotifyWarning("Not enough available bytes to read!!! Expected: " + len + "; Available: " + socket.Available());
+        }
+        MTUpdate@ update;
+        if (len > 0) {
+            while (socket.Available() < int(len)) {
+                trace("(if len > 0) Waiting for more bytes to read update: " + len + "; available: " + socket.Available());
+                yield();
+            }
+            dev_trace("Reading socket into buf, len: " + len + "; available: " + socket.Available());
+            auto buf = ReadBufFromSocket(socket, len);
+            if (buf.GetSize() != len) {
+                warn("ReadMTUpdateMsg1: Read wrong number of bytes: Expected: " + len + "; Read: " + int32(buf.GetSize()));
+            }
+            dev_trace("Buf to update now");
+            @update = BufToMTUpdate(ty, buf);
+            dev_trace("Got update");
+        }
+        if (avail - socket.Available() > int(len)) {
+            warn("ReadMTUpdateMsg2: Read wrong number of bytes: Expected: " + len + "; before - after available: " + (avail - socket.Available()));
+        }
+        dev_trace("reading msg tail");
+        // trace('remaining before meta: ' + socket.Available());
+        // trace('reading 8 bytes: ' + Text::FormatPointer(socket.ReadInt64()));
+        auto meta = ReadMsgTail(socket);
+        // trace('remaining after meta: ' + socket.Available());
+        // trace('meta.playerId: ' + meta.playerId);
+        dev_trace('meta.timestamp: ' + Text::FormatPointer(meta.timestamp));
+        if (update is null) {
+            warn("Failed to read update from server");
+            return null;
+        }
+        @update.meta = meta;
+        if (update.ty != ty) {
+            warn("Mismatched update type: " + tostring(update.ty) + " != " + tostring(ty));
+        }
+        return update;
+    }
+
 }
 
 // must match server; u8
@@ -420,63 +516,28 @@ class MTSetSkinUpdate : MTUpdate {
 }
 
 
-MTUpdate@ ReadMTUpdateMsg(Net::Socket@ socket) {
-    // min size: 17 (u8 + 0u32 + 0u32 + u64)
-    if (socket.Available() < 17) {
-        return null;
+class MTHeader {
+    uint32 PayloadLen;
+    MTUpdateTy ty;
+    MTHeader(uint32 PayloadLen, MTUpdateTy ty) {
+        this.PayloadLen = PayloadLen;
+        this.ty = ty;
     }
-    auto start_avail = socket.Available();
-    auto ty = MTUpdateTy(socket.ReadUint8());
-    auto len = socket.ReadUint32();
-    if (len > 10000000) {
-        NotifyError("Netcode issue detected: msg of len > 10MB. Please reload the plugin. Open a fresh map, and rejoin the room.");
-        throw('ReadMTUpdateMsg: bad msg length! > 10MB');
+    void WriteToSocket(Net::Socket@ soc) {
+        Socket_WriteSTART(soc);
+        soc.Write(PayloadLen);
+        soc.Write((PayloadLen & 0xFFFFFF) | (uint(ty) << 24));
     }
-    auto avail = socket.Available();
-    while (socket.Available() < int(len)) {
-        dev_trace("Waiting for more bytes to read update: " + len + "; available: " + socket.Available() + "; start_avail: " + start_avail + "; ty: " + ty);
-        yield();
-    }
-    avail = socket.Available();
-    dev_trace("!!!! Read update ("+tostring(ty)+") len: " + Text::Format("0x%08x", len) + "; available: " + socket.Available());
-    if (socket.Available() < int(len)) {
-        NotifyWarning("Not enough available bytes to read!!! Expected: " + len + "; Available: " + socket.Available());
-    }
-    MTUpdate@ update;
-    if (len > 0) {
-        while (socket.Available() < int(len)) {
-            trace("(if len > 0) Waiting for more bytes to read update: " + len + "; available: " + socket.Available());
-            yield();
-        }
-        dev_trace("Reading socket into buf, len: " + len + "; available: " + socket.Available());
-        auto buf = ReadBufFromSocket(socket, len);
-        if (buf.GetSize() != len) {
-            warn("ReadMTUpdateMsg1: Read wrong number of bytes: Expected: " + len + "; Read: " + int32(buf.GetSize()));
-        }
-        dev_trace("Buf to update now");
-        @update = BufToMTUpdate(ty, buf);
-        dev_trace("Got update");
-    }
-    if (avail - socket.Available() > int(len)) {
-        warn("ReadMTUpdateMsg2: Read wrong number of bytes: Expected: " + len + "; before - after available: " + (avail - socket.Available()));
-    }
-    dev_trace("reading msg tail");
-    // trace('remaining before meta: ' + socket.Available());
-    // trace('reading 8 bytes: ' + Text::FormatPointer(socket.ReadInt64()));
-    auto meta = ReadMsgTail(socket);
-    // trace('remaining after meta: ' + socket.Available());
-    // trace('meta.playerId: ' + meta.playerId);
-    dev_trace('meta.timestamp: ' + Text::FormatPointer(meta.timestamp));
-    if (update is null) {
-        warn("Failed to read update from server");
-        return null;
-    }
-    @update.meta = meta;
-    if (update.ty != ty) {
-        warn("Mismatched update type: " + tostring(update.ty) + " != " + tostring(ty));
-    }
-    return update;
 }
+
+void Socket_WriteSTART(Net::Socket@ soc) {
+    soc.WriteRaw("START***");
+}
+
+void Socket_WriteEND(Net::Socket@ soc) {
+    soc.WriteRaw("****ENDS");
+}
+
 
 MTUpdate@ BufToMTUpdate(MTUpdateTy ty, MemoryBuffer@ buf) {
     switch (ty) {

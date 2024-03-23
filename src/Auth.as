@@ -37,5 +37,5 @@ const string GetAuthToken() {
 }
 
 bool HasAuthToken() {
-    return g_opAuthToken != "" && lastAuthTime > 0 && (Time::Now - lastAuthTime) < (3 * 60 * 1000);
+    return g_opAuthToken != "" && lastAuthTime > 0 && Time::Now < lastAuthTime + (180 * 1000);
 }

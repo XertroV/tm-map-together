@@ -10,4 +10,4 @@ siteid   = 521
 optional_dependencies = ["Editor", "editor"]
 dependencies = ["VehicleState", "Camera"]
 
-timeout = 75000
+timeout = 10000
