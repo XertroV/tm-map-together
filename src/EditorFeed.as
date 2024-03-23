@@ -40,18 +40,18 @@ namespace Editor {
         }
     }
 
-    // void ReadIntoPendingMessagesWithDiscard() {
-    //     if (g_MTConn is null) return;
-    //     auto updates = g_MTConn.ReadUpdates(50);
-    //     if (updates is null) return;
-    //     for (uint i = 0; i < updates.Length; i++) {
-    //         auto ty = updates[i].ty;
-    //         if (ty == MTUpdateTy::VehiclePos || ty == MTUpdateTy::PlayerCamCursor) {
-    //             continue;
-    //         }
-    //         pendingUpdates.InsertLast(updates[i]);
-    //     }
-    // }
+    void ReadIntoPendingMessagesWithDiscard() {
+        if (g_MTConn is null) return;
+        auto updates = g_MTConn.ReadUpdates(50);
+        if (updates is null) return;
+        for (uint i = 0; i < updates.Length; i++) {
+            auto ty = updates[i].ty;
+            if (ty == MTUpdateTy::VehiclePos || ty == MTUpdateTy::PlayerCamCursor) {
+                continue;
+            }
+            pendingUpdates.InsertLast(updates[i]);
+        }
+    }
 
     void EditorFeedGen_Loop() {
         ResetOnEnterEditor();
@@ -74,12 +74,13 @@ namespace Editor {
         while (app.Editor !is null) {
             while (app.CurrentPlayground !is null || cast<CGameCtnEditorFree>(app.Editor) is null || app.LoadProgress.State != NGameLoadProgress::EState::Disabled) {
                 CheckUpdateVehicle(cast<CSmArenaClient>(app.CurrentPlayground));
-                // g_MTConn.PauseAutoRead = true;
-                // ReadIntoPendingMessagesWithDiscard();
+                g_MTConn.PauseAutoRead = true;
+                ReadIntoPendingMessagesWithDiscard();
                 yield();
             }
-            // g_MTConn.PauseAutoRead = false;
+            g_MTConn.PauseAutoRead = false;
             @editor = cast<CGameCtnEditorFree>(app.Editor);
+            if (editor is null) continue;
             CheckUpdateCursor(editor);
 
 
@@ -130,9 +131,12 @@ namespace Editor {
             //     warn('can read: false');
             //     break;
             // }
+            // auto nbPendingUpdates = pendingUpdates.Length;
+            auto updates = g_MTConn.ReadUpdates(50);
             auto nbPendingUpdates = pendingUpdates.Length;
+            auto nbUpdates = updates.Length;
             if (reportUpdates) {
-                trace("nbPendingUpdates: " + nbPendingUpdates);
+                trace("updates: " +updates.Length+ ", nbPendingUpdates: " + nbPendingUpdates);
             }
 
             if (nbPendingUpdates > 0) {
@@ -158,10 +162,10 @@ namespace Editor {
                 }
                 pendingUpdates.RemoveRange(0, pendingUpdates.Length);
 
-                // for (uint i = 0; i < nbUpdates; i++) {
-                //     updates[i].Apply(editor);
-                //     trace("!!!!!!!!!!!!!!!!!!           applied update: " + i);
-                // }
+                for (uint i = 0; i < nbUpdates; i++) {
+                    updates[i].Apply(editor);
+                    trace("!!!!!!!!!!!!!!!!!!           applied update: " + i);
+                }
 
                 if (autosave) {
                     editor.PluginMapType.AutoSave();
@@ -177,10 +181,12 @@ namespace Editor {
             }
             yield();
         }
-        trace('exited Editor::EditorFeedGen_Loop');
-        g_MTConn.Close();
-        @g_MTConn = null;
-        trace('Closed connection and set to null');
+        warn('exited Editor::EditorFeedGen_Loop');
+        if (g_MTConn !is null) {
+            g_MTConn.Close();
+            @g_MTConn = null;
+        }
+        warn('Closed connection and set to null');
         UserUndoRedoDisablePatchEnabled = false;
     }
 
@@ -219,7 +225,7 @@ namespace Editor {
     PlayerCamCursor@ lastPlayerCamCursor = PlayerCamCursor();
 
     void CheckUpdateCursor(CGameCtnEditorFree@ editor) {
-        if (lastPlayerCamCursor.UpdateFromGame(editor)) {
+        if (g_MTConn != null && lastPlayerCamCursor.UpdateFromGame(editor)) {
             g_MTConn.WritePlayerCamCursor(lastPlayerCamCursor);
         }
     }

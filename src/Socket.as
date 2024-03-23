@@ -36,7 +36,7 @@ class MapTogetherConnection {
         ExpectRoomDetails();
         dev_trace('Got room details');
         startnew(Editor::EditorFeedGen_Loop);
-        startnew(CoroutineFunc(this.ReadUpdatesLoop));
+        // startnew(CoroutineFunc(this.ReadUpdatesLoop));
         this.SendMapAsMacroblock();
         IS_CONNECTING = false;
     }
@@ -60,7 +60,7 @@ class MapTogetherConnection {
         ExpectOKResp();
         ExpectRoomDetails();
         startnew(Editor::EditorFeedGen_Loop);
-        startnew(CoroutineFunc(this.ReadUpdatesLoop));
+        // startnew(CoroutineFunc(this.ReadUpdatesLoop));
         IS_CONNECTING = false;
     }
 
@@ -230,10 +230,11 @@ class MapTogetherConnection {
     bool PauseAutoRead = false;
 
     void ReadUpdatesLoop() {
+        return;
         while (IsConnecting) yield();
         while (IsConnected) {
             while (PauseAutoRead) yield();
-            auto updates = ReadUpdates(200);
+            auto updates = ReadUpdates(50);
             // pendingUpdates
             if (updates !is null) {
                 for (uint i = 0; i < updates.Length; i++) {
@@ -244,7 +245,7 @@ class MapTogetherConnection {
         }
     }
 
-    protected MTUpdate@[]@ ReadUpdates(uint max) {
+    MTUpdate@[]@ ReadUpdates(uint max) {
         if (socket is null) return null;
         if (socket.Available() < 1) return {};
         MTUpdate@[] updates;
