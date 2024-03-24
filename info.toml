@@ -2,7 +2,7 @@
 name     = "Map Together"
 author   = "XertroV"
 category = "Map Editor"
-version  = "0.1.3"
+version  = "0.1.4"
 siteid   = 521
 
 [script]
