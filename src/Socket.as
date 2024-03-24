@@ -1,3 +1,5 @@
+const uint meta_bytes = 46;
+
 class MapTogetherConnection {
     protected Net::Socket@ socket;
     string op_token;
@@ -359,8 +361,6 @@ class MapTogetherConnection {
     }
 
 
-
-    const uint meta_bytes = 46;
 
     MTUpdate@ ReadMTUpdateMsg() {
         // while (!socket.CanRead()) {

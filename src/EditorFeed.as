@@ -18,6 +18,8 @@ void ResetOnEnterEditor() {
 uint cacheAutosavedIx = 0;
 // MTUpdate@[] pendingUpdates;
 
+bool placedLastFrame = false;
+
 namespace Editor {
     // Run Context: MainLoop and GameLoop seem to work
     void CheckForFreeblockDel() {
@@ -198,14 +200,11 @@ namespace Editor {
                 //     trace("!!!!!!!!!!!!!!!!!!           applied update: " + i);
                 // }
 
-
-                // uint origPlacedTotal = placedB.Length + placedI.Length;
-                // uint origDelTotal = delB.Length + delI.Length;
-                uint newPlacedTotal = placedB.Length + placedI.Length;
-                uint newDelTotal = delB.Length + delI.Length;
-                if (origPlacedTotal != newPlacedTotal || origDelTotal != newDelTotal) {
-                    Notify("EditorFeedGen_Loop: placed/del changed during update processing. origPlacedTotal: " + origPlacedTotal + ", newPlacedTotal: " + newPlacedTotal + ", origDelTotal: " + origDelTotal + ", newDelTotal: " + newDelTotal);
-                }
+                // uint newPlacedTotal = placedB.Length + placedI.Length;
+                // uint newDelTotal = delB.Length + delI.Length;
+                // if (origPlacedTotal != newPlacedTotal || origDelTotal != newDelTotal) {
+                //     Notify("EditorFeedGen_Loop: placed/del changed during update processing. origPlacedTotal: " + origPlacedTotal + ", newPlacedTotal: " + newPlacedTotal + ", origDelTotal: " + origDelTotal + ", newDelTotal: " + newDelTotal);
+                // }
 
                 if (autosave) {
                     editor.PluginMapType.AutoSave();

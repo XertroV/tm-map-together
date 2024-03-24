@@ -404,9 +404,9 @@ Editor::MacroblockSpec@ lastDeleted;
 
 
 void dev_trace(const string &in msg) {
-// #if DEV
-    trace(msg);
-// #endif
+#if DEV
+    // trace(msg);
+#endif
 }
 
 
