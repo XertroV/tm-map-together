@@ -233,13 +233,13 @@ class MapTogetherConnection {
     // not used
     bool PauseAutoRead = false;
     MTUpdate@[] pendingUpdates;
+    uint msgsRead = 0;
 
     void ReadUpdatesLoop() {
         MTUpdate@ next;
         while (IsConnecting) yield();
         while (IsConnected) {
             // while (PauseAutoRead) yield();
-            auto msgsRead = 0;
             @next = ReadMTUpdateMsg();
             if (next !is null) {
                 if (ignorePlace > 0 && next.ty == MTUpdateTy::Place) {
@@ -259,7 +259,6 @@ class MapTogetherConnection {
                 } else {
                     pendingUpdates.InsertLast(next);
                     msgsRead++;
-                    if (msgsRead > 10) yield();
                 }
             } else {
                 yield();

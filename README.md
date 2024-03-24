@@ -20,6 +20,43 @@ todo:
 - [x] svr: remove players
 - [x] svr: parallel reads / per player
 
+- server issue limiting to 25 blocks, only triggers more on update
+
+- version checking
+  - can abuse bad room id for version?
+
+- room options:
+  - allow custom items
+  - map base size
+  - map mood
+  - set car (stadium / rally / snow / desert)
+
+- reconnect to server issue on desync (then it rebuilds)
+  - avoid rebuild (use autosave with sequence number?)
+  - avoid needing to restart map at all (detect desync and reapply actions)
+
+- laggy when building together after a while
+- (this is okay) test driving updates when you leave
+
+- optimize loading prior map, break into chunks
+- add autosave or saved map pre-upload / download to avoid replaying history
+  - require sequence numbers
+
+- clear all locked down
+- undo capacity for admin / mods
+
+- skin sync
+
+- tm2 map together
+
+does it build entire map
+
+what if 2 ppl load diff maps
+
+-
+
+
+- custom item uploads
 
 - game crash on reload or joining room
 
@@ -29,7 +66,9 @@ todo:
 
 - rejoin from X spot
 
-- separate loop for reading packets
+- [x] separate loop for reading packets
+
+
 
 - demarcate packets with start / end
   - 0x2a2a2a5452415453 (b"START***")
