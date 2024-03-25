@@ -25,7 +25,7 @@ const string CheckTokenUpdate() {
             lastAuthTime = Time::Now;
             // OnGotNewToken();
         } catch {
-            warn("Got exception refreshing auth token: " + getExceptionInfo());
+            log_warn("Got exception refreshing auth token: " + getExceptionInfo());
             g_opAuthToken = "";
         }
     }

@@ -72,7 +72,7 @@ void PushScissor(vec2 xy, vec2 wh) {
 void PopScissor() {
     if (scissorStack is null) return;
     if (scissorStack.IsEmpty()) {
-        warn("PopScissor called on empty stack!");
+        log_warn("PopScissor called on empty stack!");
         nvg::ResetScissor();
     } else {
         scissorStack.RemoveAt(scissorStack.Length - 1);

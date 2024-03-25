@@ -1,5 +1,14 @@
+[Setting category="UI" name="Use a colorful plugin name." description="Affects menu and window title"]
+bool S_NiceName = true;
+
 [Setting hidden]
 bool S_RenderPlayersNvg = true;
+
+[Setting hidden]
+bool S_RenderStatusHUD = true;
+
+[Setting hidden]
+bool S_EnablePlacementOptmization_Skip1TrivialMine = true;
 
 [Setting category="UI" name="Player Label Size" min=6 max=80 drag]
 float S_PlayerLabelHeight = 20.0;

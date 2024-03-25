@@ -7,18 +7,19 @@ void RunEditorFeedGenerator() {
 
 void ResetOnLeaveEditor() {
     cacheAutosavedIx = 0;
+    myUpdateStack.RemoveRange(0, myUpdateStack.Length);
 }
 
 void ResetOnEnterEditor() {
+    myUpdateStack.RemoveRange(0, myUpdateStack.Length);
     cacheAutosavedIx = GetAutosaveStackPos(GetAutosaveStructPtr(GetApp()));
     // Main loop works. Main is 50/50
     startnew(Editor::CheckForFreeblockDel).WithRunContext(Meta::RunContext::GameLoop);
 }
 
 uint cacheAutosavedIx = 0;
-// MTUpdate@[] pendingUpdates;
 
-bool placedLastFrame = false;
+MTUpdateUndoable@[] myUpdateStack;
 
 namespace Editor {
     // Run Context: MainLoop and GameLoop seem to work
@@ -59,21 +60,23 @@ namespace Editor {
     void EditorFeedGen_Loop() {
         ResetOnEnterEditor();
         UserUndoRedoDisablePatchEnabled = true;
+        SetupEditorIntercepts();
+        Patch_DisableSweeps.Apply();
         sleep(200);
 
         CGameCtnApp@ app = GetApp();
         CGameCtnEditorFree@ editor = cast<CGameCtnEditorFree>(app.Editor);
         if (editor is null) {
-            warn("EditorFeedGen_Loop: Editor is null");
+            log_warn("EditorFeedGen_Loop: Editor is null");
             return;
         }
         while (!editor.PluginMapType.IsEditorReadyForRequest) yield();
         @editor = cast<CGameCtnEditorFree>(app.Editor);
         if (editor is null) {
-            warn("EditorFeedGen_Loop: Editor is null");
+            log_warn("EditorFeedGen_Loop: Editor is null");
             return;
         }
-        trace('initial autosave now.');
+        log_trace('initial autosave now.');
         editor.PluginMapType.AutoSave();
         yield();
 
@@ -114,12 +117,19 @@ namespace Editor {
 
             if (placedB.Length > 0 || placedI.Length > 0) {
                 @placeMb = Editor::MakeMacroblockSpec(placedB, placedI);
+                // update last local action MB so only both are non-null if they took place on the same frame.
+                @lastLocalPlaceMb = placeMb;
+                @lastLocalDeleteMb = null;
             } else {
                 @placeMb = null;
             }
 
             if (delB.Length > 0 || delI.Length > 0) {
                 @delMb = Editor::MakeMacroblockSpec(delB, delI);
+                @lastLocalDeleteMb = delMb;
+                if (placeMb is null) {
+                    @lastLocalPlaceMb = null;
+                }
             } else {
                 @delMb = null;
             }
@@ -131,26 +141,28 @@ namespace Editor {
             bool reportUpdates = false;
 
             if (delMb !is null) {
-                trace("sending deleted");
+                log_trace("sending deleted");
                 g_MTConn.WriteDeleted(delMb);
+                myUpdateStack.InsertLast(MTDeleteUpdate(delMb));
+                reportUpdates = true;
             }
 
             if (placeMb !is null) {
-                trace("sending placed");
+                log_trace("sending placed");
                 g_MTConn.WritePlaced(placeMb);
-                @lastPlaced = placeMb;
+                myUpdateStack.InsertLast(MTPlaceUpdate(placeMb));
                 reportUpdates = true;
             }
 
             // ignore set skins for now (infinite loop glitch oops)
             // if (setSkins.Length > 0) {
-            //     trace("sending set skins");
+            //     log_trace("sending set skins");
             //     g_MTConn.WriteSetSkins(setSkins);
             //     reportUpdates = true;
             // }
 
             // if (!g_MTConn.socket.CanRead()) {
-            //     warn('can read: false');
+            //     log_warn('can read: false');
             //     break;
             // }
             // auto nbPendingUpdates = pendingUpdates.Length;
@@ -160,12 +172,38 @@ namespace Editor {
             // auto nbUpdates = updates.Length;
             // if (reportUpdates || nbUpdates > 0 || nbPendingUpdates > 0) {
             if (reportUpdates || nbPendingUpdates > 0) {
-                // trace("updates: " +updates.Length+ ", nbPendingUpdates: " + nbPendingUpdates);
-                trace("nbPendingUpdates: " + nbPendingUpdates);
+                // log_trace("updates: " +updates.Length+ ", nbPendingUpdates: " + nbPendingUpdates);
+                log_trace("nbPendingUpdates: " + nbPendingUpdates);
             }
 
             // if (nbPendingUpdates > 0 || nbUpdates > 0) {
-            if (nbPendingUpdates > 0) {
+            // special case: the last update is the thing we just placed, and that's the only change
+            bool skipNormalProcessing = false;
+            if (S_EnablePlacementOptmization_Skip1TrivialMine && nbPendingUpdates == 1 && Editor_GetCurrPosInUndoStack(editor) == cacheAutosavedIx + 1) {
+                auto placeUpdate = cast<MTPlaceUpdate>(g_MTConn.pendingUpdates[0]);
+                auto delUpdate = cast<MTDeleteUpdate>(g_MTConn.pendingUpdates[0]);
+                if (g_MTConn.pendingUpdates[0].ty == MTUpdateTy::Place
+                    && AreMacroblockSpecsEq(lastLocalPlaceMb, placeUpdate.mb)
+                ) {
+                    log_debug("skipping normal processing: trivial place");
+                    skipNormalProcessing = true;
+                    @lastAppliedPlaceMb = placeUpdate.mb;
+                } else if (g_MTConn.pendingUpdates[0].ty == MTUpdateTy::Delete
+                    && AreMacroblockSpecsEq(lastLocalDeleteMb, delUpdate.mb)
+                ) {
+                    log_debug("skipping normal processing: trivial delete");
+                    skipNormalProcessing = true;
+                    @lastAppliedDeleteMb = delUpdate.mb;
+                }
+
+                // update state
+                if (skipNormalProcessing) {
+                    Editor_CachePosInUndoStack(editor);
+                    g_MTConn.pendingUpdates.RemoveAt(0);
+                    log_trace("cacheAutosavedIx: " + cacheAutosavedIx);
+                }
+            }
+            if (!skipNormalProcessing && nbPendingUpdates > 0) {
                 auto pmt = editor.PluginMapType;
 
                 auto _NextMapElemColor = pmt.NextMapElemColor;
@@ -178,27 +216,29 @@ namespace Editor {
                 pmt.NextMbAdditionalPhaseOffset = CGameEditorPluginMap::EPhaseOffset::None;
                 pmt.ForceMacroblockColor = false;
 
-                trace("applying updates: " + nbPendingUpdates);
+                log_trace("applying updates: " + nbPendingUpdates);
                 Editor_UndoToLastCached(editor);
 
                 uint startPlacing = Time::Now;
                 uint maxPlacingTime = startPlacing + 1500;
                 bool autosave = false;
                 for (uint i = 0; i < nbPendingUpdates; i++) {
-                    autosave = g_MTConn.pendingUpdates[i].Apply(editor) || autosave;
-                    trace("!!!!!!!!!!!!!!!!!!    "+tostring(g_MTConn.pendingUpdates[i].ty)+"       applied pending update: " + i);
                     if (maxPlacingTime < Time::Now) {
-                        NotifyWarning("EditorFeedGen_Loop: max placing time exceeded. Breaking.");
-                        nbPendingUpdates = i + 1;
+                        auto remainingUpdates = nbPendingUpdates - i;
+                        auto timeTaken = Time::Now - startPlacing;
+                        log_warn("EditorFeedGen_Loop: max placing time exceeded ("+timeTaken+"ms). Remaining updates: "+remainingUpdates+" / "+nbPendingUpdates);
+                        nbPendingUpdates = i;
                         break;
                     }
+                    autosave = g_MTConn.pendingUpdates[i].Apply(editor) || autosave;
+                    log_trace("!!!!!!!!!!!!!!!!!!    "+tostring(g_MTConn.pendingUpdates[i].ty)+"       applied pending update: " + i);
+                }
+                if (g_MTConn.pendingUpdates[nbPendingUpdates - 1].ty == MTUpdateTy::Place) {
+                    @lastAppliedPlaceMb = cast<MTPlaceUpdate>(g_MTConn.pendingUpdates[nbPendingUpdates - 1]).mb;
+                } else if (g_MTConn.pendingUpdates[nbPendingUpdates - 1].ty == MTUpdateTy::Delete) {
+                    @lastAppliedDeleteMb = cast<MTDeleteUpdate>(g_MTConn.pendingUpdates[nbPendingUpdates - 1]).mb;
                 }
                 g_MTConn.pendingUpdates.RemoveRange(0, nbPendingUpdates);
-
-                // for (uint i = 0; i < nbUpdates; i++) {
-                //     autosave = updates[i].Apply(editor) || autosave;
-                //     trace("!!!!!!!!!!!!!!!!!!           applied update: " + i);
-                // }
 
                 // uint newPlacedTotal = placedB.Length + placedI.Length;
                 // uint newDelTotal = delB.Length + delI.Length;
@@ -211,7 +251,7 @@ namespace Editor {
                 }
                 // we track this to note player placements. When we get new packets, we undo back to the last cached point, and then apply updates
                 Editor_CachePosInUndoStack(editor);
-                trace("cacheAutosavedIx: " + cacheAutosavedIx);
+                log_trace("cacheAutosavedIx: " + cacheAutosavedIx);
 
                 pmt.NextMapElemColor = _NextMapElemColor;
                 pmt.NextItemPhaseOffset = _NextPhaseOffset;
@@ -220,27 +260,34 @@ namespace Editor {
             }
             yield();
         }
-        warn('exited Editor::EditorFeedGen_Loop');
+        log_warn('exited Editor::EditorFeedGen_Loop');
         if (g_MTConn !is null) {
             g_MTConn.Close();
             @g_MTConn = null;
+            g_MenuState = MenuState::None;
         }
-        warn('Closed connection and set to null');
+        log_warn('Closed connection and set to null');
         UserUndoRedoDisablePatchEnabled = false;
+        CleanupEditorIntercepts();
+        Patch_DisableSweeps.Unapply();
     }
 
     void Editor_CachePosInUndoStack(CGameCtnEditorFree@ editor) {
         cacheAutosavedIx = GetAutosaveStackPos(GetAutosaveStructPtr(editor));
     }
 
+    uint Editor_GetCurrPosInUndoStack(CGameCtnEditorFree@ editor) {
+        return GetAutosaveStackPos(GetAutosaveStructPtr(editor));
+    }
+
     void Editor_UndoToLastCached(CGameCtnEditorFree@ editor) {
         auto autosaveStruct = GetAutosaveStructPtr(editor);
         auto currAutosaveIx = GetAutosaveStackPos(autosaveStruct);
-        trace("currAutosaveIx: " + currAutosaveIx + ", cacheAutosavedIx: " + cacheAutosavedIx);
+        log_trace("currAutosaveIx: " + currAutosaveIx + ", cacheAutosavedIx: " + cacheAutosavedIx);
         if (currAutosaveIx >= 0 && cacheAutosavedIx >= 0) {
             while (currAutosaveIx > int(cacheAutosavedIx)) {
                 editor.PluginMapType.Undo();
-                trace("undid: " + currAutosaveIx);
+                log_trace("undid: " + currAutosaveIx);
                 currAutosaveIx--;
             }
         } else {
@@ -275,6 +322,12 @@ namespace Editor {
             g_MTConn.WritePlayerCamCursor(lastPlayerCamCursor);
         }
     }
+}
+
+
+
+void UndoRestrictionPatches() {
+    Patch_DisableSweeps.Unapply();
 }
 
 

@@ -1,67 +1,127 @@
 const uint meta_bytes = 46;
 
+// const uint8 MAP_MOOD_DAY = 0;
+// const uint8 MAP_MOOD_NIGHT = 1;
+// const uint8 MAP_MOOD_SUNSET = 2;
+// const uint8 MAP_MOOD_SUNRISE = 3;
+const uint8 MAP_BASE_NOSTADIUM  = 0b00100000;
+const uint8 MAP_BASE_STADIUM    = 0b01000000;
+const uint8 MAP_BASE_STADIUM155 = 0b10000000;
+
 class MapTogetherConnection {
     protected Net::Socket@ socket;
     string op_token;
     bool hasErrored = false;
     string error;
 
+    MTServers server;
     string remote_domain;
     string roomId;
     string roomPassword;
     uint actionRateLimit;
+    nat3 mapSize;
+    uint8 mapBase;
+    uint8 baseCar;
+    uint8 rulesFlags;
+    uint itemMaxSize;
 
     PlayerInRoom@[] playersInRoom;
+    PlayerInRoom@[] playersEver;
+    PlayerInRoom@[] admins;
+    PlayerInRoom@[] mods;
+    dictionary names;
     Editor::MacroblockSpec@ firstMB;
+    bool logAllUpdates = false;
+    MTUpdateUndoable@[] updateLog;
 
     // create a room
-    MapTogetherConnection(const string &in password, uint roomMsBetweenActions = 0) {
+    MapTogetherConnection(const string &in password, bool expectEditorImmediately,
+        uint roomMsBetweenActions = 0,
+        nat3 _mapSize = nat3(80, 255, 80), uint8 _mapBase = 128, uint8 _baseCar = 0,
+        uint8 _rulesFlags = 0, uint _itemMaxSize = 0
+    ) {
+        server = m_CurrServer;
         remote_domain = ServerToEndpoint(m_CurrServer);
-        dev_trace("Creating new room on server: " + remote_domain);
+        log_info("Creating new room on server: " + remote_domain);
         IS_CONNECTING = true;
         InitSock();
-        dev_trace('Connected to server');
+        log_info('Connected to server');
         if (socket is null) {
-            warn("socket is null");
+            log_warn("socket is null");
             return;
         }
         // 1 = create
-        dev_trace('writing room request type');
+        log_trace('writing room request type');
         socket.Write(uint8(1));
         roomPassword = password;
-        dev_trace('writing room pw');
+        log_trace('writing room pw');
         WriteLPString(socket, roomPassword);
-        dev_trace('writing room action limit');
+        log_trace('writing room action limit: ' + roomMsBetweenActions);
         socket.Write(roomMsBetweenActions);
-        dev_trace('Sent create room request');
+        log_trace('writing room map size: ' + _mapSize.ToString());
+        socket.Write(uint8(_mapSize.x));
+        socket.Write(uint8(_mapSize.y));
+        socket.Write(uint8(_mapSize.z));
+        log_trace('writing room map base: ' + _mapBase);
+        socket.Write(uint8(_mapBase));
+        log_trace('writing room base car: ' + _baseCar);
+        socket.Write(uint8(_baseCar));
+        log_trace('writing room rules flags: ' + _rulesFlags);
+        socket.Write(uint8(_rulesFlags));
+        log_trace('writing room item max size: ' + _itemMaxSize);
+        socket.Write(_itemMaxSize);
+
+        log_info('Sent create room request');
         ExpectOKResp();
-        dev_trace('Got okay response');
+        log_info('Got okay response');
         ExpectRoomDetails();
-        dev_trace('Got room details');
+        log_info('Got room details');
+
+        auto editor = cast<CGameCtnEditorFree>(GetApp().Editor);
+        if (expectEditorImmediately) {
+            if (editor is null) {
+                NotifyError("Expected to be in editor already.");
+                while ((@editor = cast<CGameCtnEditorFree>(GetApp().Editor)) is null) yield();
+                while (!editor.PluginMapType.IsEditorReadyForRequest) yield();
+            }
+            this.SendMapAsMacroblock();
+        } else {
+            if (editor is null) Notify("Waiting to enter editor...");
+            while ((@editor = cast<CGameCtnEditorFree>(GetApp().Editor)) is null) yield();
+            while (!editor.PluginMapType.IsEditorReadyForRequest) yield();
+        }
+
         startnew(Editor::EditorFeedGen_Loop);
         startnew(CoroutineFunc(this.ReadUpdatesLoop));
-        this.SendMapAsMacroblock();
         IS_CONNECTING = false;
     }
 
     // join a room
     MapTogetherConnection(const string &in roomId, const string &in password = "") {
         remote_domain = ServerToEndpoint(m_CurrServer);
-        dev_trace("Joining room on server: " + remote_domain);
+        log_info("Joining room on server: " + remote_domain);
         IS_CONNECTING = true;
         InitSock();
         if (socket is null) {
-            warn("socket is null");
+            log_warn("socket is null");
             return;
         }
         // 2 = join
-        dev_trace('writing room request type');
+        log_trace('writing room request type');
         socket.Write(uint8(2));
         WriteLPString(socket, roomId);
         roomPassword = password;
         WriteLPString(socket, roomPassword);
         ExpectOKResp();
+        log_info("Got okay response");
         ExpectRoomDetails();
+        log_info("Got room details");
+
+        auto editor = cast<CGameCtnEditorFree>(GetApp().Editor);
+        if (editor is null) NotifyWarning("Waiting to enter editor...");
+        while ((@editor = cast<CGameCtnEditorFree>(GetApp().Editor)) is null) yield();
+        while (!editor.PluginMapType.IsEditorReadyForRequest) yield();
+
         startnew(Editor::EditorFeedGen_Loop);
         startnew(CoroutineFunc(this.ReadUpdatesLoop));
         IS_CONNECTING = false;
@@ -76,33 +136,61 @@ class MapTogetherConnection {
     bool get_IsShutdown() {
         return socket is null || hasErrored;
     }
+    float get_ActionLimitHz() {
+        return ActionLimitToHz(actionRateLimit);
+    }
+    const string LookupName(const string &in id) {
+        if (names.Exists(id)) {
+            return string(names[id]);
+        }
+        return id;
+    }
 
     void ExpectRoomDetails() {
-        dev_trace('Expecting room details, avail: ' + socket.Available());
-        dev_trace('socket can read: ' + socket.CanRead());
+        log_trace('Expecting room details, avail: ' + socket.Available());
+        log_trace('socket can read: ' + socket.CanRead());
         while (!socket.CanRead() && socket.Available() < 2) yield();
-        dev_trace('Got enough bytes to read len. avail: ' + socket.Available());
+        log_trace('Got enough bytes to read len. avail: ' + socket.Available());
         // let _ = write_lp_string(&mut stream, &self.id_str).await;
-        // let _ = stream.write_u32_le(self.action_rate_limit).await;
+        // let _ = stream.write_u32_le(self.deets.action_rate_limit).await;
+        // let _ = stream.write_u32_le(self.deets.map_size[0]).await;
+        // let _ = stream.write_u32_le(self.deets.map_size[1]).await;
+        // let _ = stream.write_u32_le(self.deets.map_size[2]).await;
+        // let _ = stream.write_u8(self.deets.map_base).await;
+        // let _ = stream.write_u8(self.deets.base_car).await;
+        // let _ = stream.write_u8(self.deets.rules_flags).await;
+        // let _ = stream.write_u32_le(self.deets.item_max_size).await;
         roomId = ReadLPString(socket);
-        dev_trace("Read room id: " + roomId);
+        log_trace("Read room id: " + roomId);
         if (roomId.Length != 6) {
             CloseWithErr("Invalid room id from server: " + roomId);
             return;
         }
         m_RoomId = roomId;
         actionRateLimit = socket.ReadUint32();
-        dev_trace("Read action rate limit: " + actionRateLimit);
+        log_info("Read action rate limit: " + actionRateLimit);
+        mapSize.x = socket.ReadUint8();
+        mapSize.y = socket.ReadUint8();
+        mapSize.z = socket.ReadUint8();
+        log_info("Read map size: " + mapSize.ToString());
+        mapBase = socket.ReadUint8();
+        log_info("Read map base: " + mapBase);
+        baseCar = socket.ReadUint8();
+        log_info("Read base car: " + baseCar);
+        rulesFlags = socket.ReadUint8();
+        log_info("Read rules flags: " + rulesFlags);
+        itemMaxSize = socket.ReadUint32();
+        log_info("Read item max size: " + itemMaxSize);
     }
 
     void ExpectOKResp() {
-        dev_trace('Expecting OK response');
+        log_trace('Expecting OK response');
         while (!socket.CanRead() && socket.Available() < 3) yield();
-        dev_trace('Got enough bytes to read, avail: ' + socket.Available());
+        log_trace('Got enough bytes to read, avail: ' + socket.Available());
         auto resp = socket.ReadRaw(3);
-        dev_trace('Read bytes OK_/ERR, avail: ' + socket.Available());
+        log_trace('Read bytes OK_/ERR, avail: ' + socket.Available());
         if (resp == "OK_") return;
-        dev_trace("Not OK_, got: " + resp);
+        log_trace("Not OK_, got: " + resp);
         if (resp != "ERR") {
             CloseWithErr("Unexpected response from server: " + resp);
         } else {
@@ -113,11 +201,11 @@ class MapTogetherConnection {
 
     protected void InitSock() {
         string op_token = GetAuthToken();
-        dev_trace('token: ' + op_token);
+        // log_trace('token: ' + op_token);
         @this.socket = Net::Socket();
         uint startTime = Time::Now;
         auto timeoutAt = Time::Now + 7500;
-        trace('Connecting to: ' + remote_domain + ':19796');
+        log_info('Connecting to: ' + remote_domain + ':19796');
         if (!socket.Connect(remote_domain, 19796)) {
             CloseWithErr("Failed to connect to MapTogether server");
             return;
@@ -129,9 +217,9 @@ class MapTogetherConnection {
             CloseWithErr("Failed to connect to MapTogether server: timeout");
             return;
         } else {
-            warn("Connected in " + (Time::Now - startTime) + " ms");
+            log_warn("Connected in " + (Time::Now - startTime) + " ms");
         }
-        trace('Connected to: ' + remote_domain + ':19796');
+        log_info('Connected to: ' + remote_domain + ':19796');
         if (!socket.Write(uint16(op_token.Length))) {
             CloseWithErr("Failed to write auth token length");
             return;
@@ -140,7 +228,11 @@ class MapTogetherConnection {
             CloseWithErr("Failed to write auth token");
             return;
         }
-        trace('Sent auth to server');
+        log_info('Sent auth to server');
+        // send version details
+        socket.Write(uint8(0xFF));
+        socket.Write(uint8(0x03));
+        socket.Write(uint8(0x80));
     }
 
     protected void CloseWithErr(const string &in err) {
@@ -164,10 +256,34 @@ class MapTogetherConnection {
 
     void SendMapAsMacroblock() {
         auto mapMb = Editor::GetMapAsMacroblock();
+        if (mapMb.macroblock.Blocks.Length == 0 && mapMb.macroblock.Items.Length == 0) {
+            // nothing to send, so don't
+            return;
+        }
         ignorePlace++;
         ignorePlaceSkins += mapMb.setSkins.Length;
         this.WritePlaced(mapMb.macroblock);
         this.WriteSetSkins(mapMb.setSkins);
+    }
+
+    void WriteUpdate(MTUpdateUndoable@ update) {
+        if (socket is null) return;
+        if (update is null) return;
+        auto place = cast<MTPlaceUpdate>(update);
+        if (place !is null) {
+            WritePlaced(place.mb);
+            return;
+        }
+        auto del = cast<MTDeleteUpdate>(update);
+        if (del !is null) {
+            WriteDeleted(del.mb);
+            return;
+        }
+        auto skin = cast<MTSetSkinUpdate>(update);
+        if (skin !is null) {
+            WriteSetSkins({skin.skin});
+            return;
+        }
     }
 
     void WriteSetSkins(const Editor::SetSkinSpec@[]@ skins) {
@@ -193,7 +309,7 @@ class MapTogetherConnection {
         auto buf = MemoryBuffer();
         mb.WriteToNetworkBuffer(buf);
         // if (mb.blocks.Length > 0) {
-        //     trace('Writing placed: mb.blocks[0].mobilVariant: ' + mb.blocks[0].mobilVariant);
+        //     log_trace('Writing placed: mb.blocks[0].mobilVariant: ' + mb.blocks[0].mobilVariant);
         // }
         buf.Seek(0);
         socket.Write(uint32(buf.GetSize()));
@@ -230,6 +346,14 @@ class MapTogetherConnection {
         socket.Write(buf, buf.GetSize());
     }
 
+    void WriteSetActionLimit(uint limit) {
+        if (socket is null) return;
+        if (!HasLocalAdmin()) return;
+        socket.Write(uint8(MTUpdateTy::Admin_SetActionLimit));
+        socket.Write(uint32(4));
+        socket.Write(uint32(limit));
+    }
+
     // not used
     bool PauseAutoRead = false;
     MTUpdate@[] pendingUpdates;
@@ -254,13 +378,23 @@ class MapTogetherConnection {
                     next.Apply(null);
                 } else if (next.ty == MTUpdateTy::VehiclePos) {
                     next.Apply(null);
+                } else if (next.ty == MTUpdateTy::Admin_SetActionLimit) {
+                    next.Apply(null);
                 } else if (next.ty == MTUpdateTy::SetSkin) {
                     // do nothing => drop set skin messages
                 } else {
                     pendingUpdates.InsertLast(next);
                     msgsRead++;
                 }
+                if (logAllUpdates && next.isUndoable) {
+                    updateLog.InsertLast(cast<MTUpdateUndoable>(next));
+                }
+                RecordUserStats(next);
             } else {
+                if (socket is null) {
+                    log_trace('socket is null, breaking read updates loop');
+                    return;
+                }
                 yield();
             }
 
@@ -275,6 +409,43 @@ class MapTogetherConnection {
         }
     }
 
+    void RecordUserStats(MTUpdate@ update) {
+        if (update is null) return;
+        auto p = FindPlayerInRoom(update.meta.playerId);
+        if (p is null) {
+            @p = FindPlayerEver(update.meta.playerId);
+        }
+        if (p is null) return;
+        p.UpdateStats(update);
+    }
+
+    PlayerInRoom@ FindAdmin(const string &in playerId) {
+        for (uint i = 0; i < admins.Length; i++) {
+            if (admins[i].id == playerId) {
+                return admins[i];
+            }
+        }
+        return null;
+    }
+
+    PlayerInRoom@ FindPlayerEver(const string &in playerId) {
+        for (uint i = 0; i < playersEver.Length; i++) {
+            if (playersEver[i].id == playerId) {
+                return playersEver[i];
+            }
+        }
+        return null;
+    }
+
+    PlayerInRoom@ FindPlayerInRoom(const string &in playerId) {
+        for (uint i = 0; i < playersInRoom.Length; i++) {
+            if (playersInRoom[i].id == playerId) {
+                return playersInRoom[i];
+            }
+        }
+        return null;
+    }
+
     // protected MTUpdate@[]@ ReadUpdates(uint max) {
     //     if (socket is null) return null;
     //     if (socket.Available() < 1) return {};
@@ -283,7 +454,7 @@ class MapTogetherConnection {
     //     MTUpdate@ next = ReadMTUpdateMsg(socket);
     //     uint count = 0;
     //     while (next !is null && count < max) {
-    //         dev_trace('read update: ' + count);
+    //         log_trace('read update: ' + count);
     //         if (ignorePlace > 0 && next.ty == MTUpdateTy::Place) {
     //             ignorePlace--;
     //         } else if (ignorePlaceSkins > 0 && next.ty == MTUpdateTy::SetSkin) {
@@ -304,17 +475,80 @@ class MapTogetherConnection {
     //         @next = ReadMTUpdateMsg(socket);
     //         count++;
     //         if (Time::Now - start > 2) {
-    //             dev_trace('breaking read loop due to yield');
+    //             log_trace('breaking read loop due to yield');
     //             break;
     //         }
     //     }
-    //     dev_trace('finished reading: ' + updates.Length);
-    //     dev_trace('remaining bytes: ' + socket.Available());
+    //     log_trace('finished reading: ' + updates.Length);
+    //     log_trace('remaining bytes: ' + socket.Available());
     //     return updates;
     // }
 
     void AddPlayer(PlayerInRoom@ player) {
-        playersInRoom.InsertLast(player);
+        if (playersEver.Length == 0) {
+            playersEver.InsertLast(player);
+            playersInRoom.InsertLast(player);
+            names[player.id] = player.name;
+            AddAdmin(player);
+            return;
+        }
+        auto p = FindPlayerInRoom(player.id);
+        if (p !is null) {
+            log_warn("Player already in room, but was added again: " + player.name);
+            return;
+        }
+        @p = FindPlayerEver(player.id);
+        if (p is null) {
+            playersEver.InsertLast(player);
+            playersInRoom.InsertLast(player);
+            names[player.id] = player.name;
+        } else {
+            playersInRoom.InsertLast(p);
+        }
+    }
+
+    bool HasLocalAdmin() {
+        for (uint i = 0; i < admins.Length; i++) {
+            if (admins[i].isLocal) return true;
+        }
+        return false;
+    }
+
+    void AddAdmin(PlayerInRoom@ player) {
+        admins.InsertLast(player);
+        player.isAdmin = true;
+        if (player.isLocal) {
+            UndoRestrictionPatches();
+            NotifyWarning("You are now an admin in this room. Restriction patches (no sweeping blocks, etc) have been disabled.");
+            logAllUpdates = true;
+        }
+    }
+
+    void AddMod(PlayerInRoom@ player) {
+        mods.InsertLast(player);
+        player.isMod = true;
+        if (player.isLocal) {
+            UndoRestrictionPatches();
+            NotifyWarning("You are now a mod in this room. Restriction patches (no sweeping blocks, etc) have been disabled.");
+        }
+    }
+
+    void RemoveMod(PlayerInRoom@ player) {
+        for (uint i = 0; i < mods.Length; i++) {
+            if (mods[i].id == player.id) {
+                mods.RemoveAt(i);
+                player.isMod = false;
+                if (player.isLocal) {
+                    NotifyWarning("You are no longer a mod in this room. Restriction patches (no sweeping blocks, etc) have been re-enabled.");
+                    if (rulesFlags & RulesFlags::AllowSweeps == 0) {
+                        Patch_DisableSweeps.Apply();
+                    }
+                    if (rulesFlags & RulesFlags::AllowSelectionCut == 0) {
+                        Patch_DisableCutSelection.Apply();
+                    }
+                }
+            }
+        }
     }
 
     void RemovePlayer(const string &in playerId) {
@@ -359,6 +593,9 @@ class MapTogetherConnection {
         }
     }
 
+    void RenderStatusHUD() {
+        if (!S_RenderStatusHUD) return;
+    }
 
 
     MTUpdate@ ReadMTUpdateMsg() {
@@ -371,59 +608,60 @@ class MapTogetherConnection {
         // }
 
         // min size: 17 (u8 + 0u32 + 0u32 + u64)
-        while (socket.Available() < 16) {
+        while (socket !is null && socket.Available() < 16) {
             yield_why("ReadMTUpdateMsg_LT17BytesAvail");
         }
+        if (socket is null) return null;
         auto start_avail = socket.Available();
         auto ty = MTUpdateTy(socket.ReadUint8());
-        dev_trace("Reading update type: " + tostring(ty));
+        log_trace("Reading update type: " + tostring(ty));
         auto len = socket.ReadUint32();
-        dev_trace("Reading update len: " + len);
+        log_trace("Reading update len: " + len);
         if (len > 10000000) {
             NotifyError("Netcode issue detected: msg of len > 10MB. Please reload the plugin. Open a fresh map, and rejoin the room.");
             throw('ReadMTUpdateMsg: bad msg length! > 10MB');
         }
         while (socket.Available() < int(len + meta_bytes)) {
-            dev_trace("Waiting for more bytes to read update: " + len + "; available: " + socket.Available() + "; start_avail: " + start_avail + "; ty: " + ty);
+            log_trace("Waiting for more bytes to read update: " + len + "; available: " + socket.Available() + "; start_avail: " + start_avail + "; ty: " + ty);
             yield_why("ReadMTUpdateMsg_WaitForLengthBytes");
         }
         auto avail = socket.Available();
-        dev_trace("!!!! Read update ("+tostring(ty)+") len: " + Text::Format("0x%08x", len) + "; available: " + socket.Available());
+        log_trace("!!!! Read update ("+tostring(ty)+") len: " + Text::Format("0x%08x", len) + "; available: " + socket.Available());
         if (socket.Available() < int(len)) {
             NotifyWarning("Not enough available bytes to read!!! Expected: " + len + "; Available: " + socket.Available());
         }
         MTUpdate@ update;
         if (len > 0) {
             while (socket.Available() < int(len + meta_bytes)) {
-                trace("(if len > 0) Waiting for more bytes to read update: " + (len + meta_bytes) + "; available: " + socket.Available());
+                log_trace("(if len > 0) Waiting for more bytes to read update: " + (len + meta_bytes) + "; available: " + socket.Available());
                 yield_why("ReadMTUpdateMsg_WaitForBytes_2_ExpectNoYield");
             }
-            dev_trace("Reading socket into buf, len: " + len + "; available: " + socket.Available());
+            log_trace("Reading socket into buf, len: " + len + "; available: " + socket.Available());
             auto buf = ReadBufFromSocket(socket, len);
             if (buf.GetSize() != len) {
-                warn("ReadMTUpdateMsg1: Read wrong number of bytes: Expected: " + len + "; Read: " + int32(buf.GetSize()));
+                log_warn("ReadMTUpdateMsg1: Read wrong number of bytes: Expected: " + len + "; Read: " + int32(buf.GetSize()));
             }
-            dev_trace("Buf to update now");
+            log_trace("Buf to update now");
             @update = BufToMTUpdate(ty, buf);
-            dev_trace("Got update");
+            log_trace("Got update");
         }
         if (avail - socket.Available() > int(len)) {
-            warn("ReadMTUpdateMsg2: Read wrong number of bytes: Expected: " + len + "; before - after available: " + (avail - socket.Available()));
+            log_warn("ReadMTUpdateMsg2: Read wrong number of bytes: Expected: " + len + "; before - after available: " + (avail - socket.Available()));
         }
-        dev_trace("reading msg tail (46 bytes); avail: " + socket.Available());
-        // trace('remaining before meta: ' + socket.Available());
-        // trace('reading 8 bytes: ' + Text::FormatPointer(socket.ReadInt64()));
+        log_trace("reading msg tail (46 bytes); avail: " + socket.Available());
+        // log_trace('remaining before meta: ' + socket.Available());
+        // log_trace('reading 8 bytes: ' + Text::FormatPointer(socket.ReadInt64()));
         auto meta = ReadMsgTail(socket);
-        // trace('remaining after meta: ' + socket.Available());
-        // trace('meta.playerId: ' + meta.playerId);
-        dev_trace('meta.timestamp: ' + Text::FormatPointer(meta.timestamp));
+        // log_trace('remaining after meta: ' + socket.Available());
+        // log_trace('meta.playerId: ' + meta.playerId);
+        log_trace('meta.timestamp: ' + Text::FormatPointer(meta.timestamp));
         if (update is null) {
-            warn("Failed to read update from server");
+            log_warn("Failed to read update from server");
             return null;
         }
         @update.meta = meta;
         if (update.ty != ty) {
-            warn("Mismatched update type: " + tostring(update.ty) + " != " + tostring(ty));
+            log_warn("Mismatched update type: " + tostring(update.ty) + " != " + tostring(ty));
         }
         return update;
     }
@@ -432,6 +670,7 @@ class MapTogetherConnection {
 
 // must match server; u8
 enum MTUpdateTy {
+    Unknown = 0,
     Place = 1,
     Delete = 2,
     // should never be recieved
@@ -441,82 +680,14 @@ enum MTUpdateTy {
     SetMapName = 6,
     PlayerJoin = 7,
     PlayerLeave = 8,
-    PromoteMod = 9,
-    DemoteMod = 10,
-    KickPlayer = 11,
-    BanPlayer = 12,
-    ChangeAdmin = 13,
+    Admin_PromoteMod = 9,
+    Admin_DemoteMod = 10,
+    Admin_KickPlayer = 11,
+    Admin_BanPlayer = 12,
+    Admin_ChangeAdmin = 13,
     PlayerCamCursor = 14,
     VehiclePos = 15,
-}
-
-class MTUpdate {
-    MTUpdateTy ty;
-    MsgMeta@ meta;
-
-    bool Apply(CGameCtnEditorFree@ editor) {
-        throw("implemented elsewhere");
-        return false;
-    }
-}
-
-
-class MTPlaceUpdate : MTUpdate {
-    Editor::MacroblockSpec@ mb;
-    MTPlaceUpdate(Editor::MacroblockSpec@ mb) {
-        this.ty = MTUpdateTy::Place;
-        @this.mb = mb;
-    }
-
-    bool Apply(CGameCtnEditorFree@ editor) override {
-        print('Applying place update: ' + mb.Blocks.Length + '; ' + mb.Items.Length);
-        if (!Editor::PlaceMacroblock(mb, false)) {
-            NotifyError("Failed to place macroblock: blocks: " + mb.Blocks.Length + "; items: " + mb.Items.Length);
-        }
-        return true;
-    }
-}
-
-
-class MTDeleteUpdate : MTUpdate {
-    Editor::MacroblockSpec@ mb;
-    MTDeleteUpdate(Editor::MacroblockSpec@ mb) {
-        this.ty = MTUpdateTy::Delete;
-        @this.mb = mb;
-    }
-
-    bool Apply(CGameCtnEditorFree@ editor) override {
-        print('Applying delete update: ' + mb.Blocks.Length + '; ' + mb.Items.Length);
-        bool freeOnly = mb.Items.Length == 0;
-        if (freeOnly) {
-            for (uint i = 0; i < mb.Blocks.Length; i++) {
-                if (!mb.Blocks[i].isFree) {
-                    freeOnly = false;
-                    break;
-                }
-            }
-        }
-        if (!Editor::DeleteMacroblock(mb, false)) {
-            if (!freeOnly) warn("Failed to delete macroblock");
-        }
-        return !freeOnly;
-    }
-}
-
-class MTSetSkinUpdate : MTUpdate {
-    Editor::SetSkinSpec@ skin;
-    MTSetSkinUpdate(Editor::SetSkinSpec@ skin) {
-        this.ty = MTUpdateTy::SetSkin;
-        @this.skin = skin;
-    }
-
-    bool Apply(CGameCtnEditorFree@ editor) override {
-        print('Applying set skin update');
-        if (!Editor::SetSkins({skin})) {
-            NotifyError("Failed to set skin");
-        }
-        return false;
-    }
+    Admin_SetActionLimit = 16,
 }
 
 
@@ -567,23 +738,23 @@ MTUpdate@ BufToMTUpdate(MTUpdateTy ty, MemoryBuffer@ buf) {
             return PlayerLeaveUpdate(buf);
             // NotifyWarning("Unimplemented: PlayerLeaveUpdateFromBuf");
             // return null;
-        case MTUpdateTy::PromoteMod:
+        case MTUpdateTy::Admin_PromoteMod:
             //return PromoteModUpdateFromBuf(buf);
             NotifyWarning("Unimplemented: PromoteModUpdateFromBuf");
             return null;
-        case MTUpdateTy::DemoteMod:
+        case MTUpdateTy::Admin_DemoteMod:
             //return DemoteModUpdateFromBuf(buf);
             NotifyWarning("Unimplemented: DemoteModUpdateFromBuf");
             return null;
-        case MTUpdateTy::KickPlayer:
+        case MTUpdateTy::Admin_KickPlayer:
             //return KickPlayerUpdateFromBuf(buf);
             NotifyWarning("Unimplemented: KickPlayerUpdateFromBuf");
             return null;
-        case MTUpdateTy::BanPlayer:
+        case MTUpdateTy::Admin_BanPlayer:
             //return BanPlayerUpdateFromBuf(buf);
             NotifyWarning("Unimplemented: BanPlayerUpdateFromBuf");
             return null;
-        case MTUpdateTy::ChangeAdmin:
+        case MTUpdateTy::Admin_ChangeAdmin:
             //return ChangeAdminUpdateFromBuf(buf);
             NotifyWarning("Unimplemented: ChangeAdminUpdateFromBuf");
             return null;
@@ -591,13 +762,15 @@ MTUpdate@ BufToMTUpdate(MTUpdateTy ty, MemoryBuffer@ buf) {
             return PlayerCamCursor(buf);
         case MTUpdateTy::VehiclePos:
             return VehiclePos(buf);
+        case MTUpdateTy::Admin_SetActionLimit:
+            return SetActionLimitUpdate(buf);
     }
     return null;
 }
 
 MTUpdate@ PlaceUpdateFromBuf(MemoryBuffer@ buf) {
     auto mt = Editor::MacroblockSpecFromBuf(buf);
-    @lastPlaced = mt;
+    @lastRxPlaceMb = mt;
     if (g_MTConn !is null && g_MTConn.firstMB is null) {
         @g_MTConn.firstMB = mt;
     }
@@ -606,7 +779,7 @@ MTUpdate@ PlaceUpdateFromBuf(MemoryBuffer@ buf) {
 
 MTUpdate@ DeleteUpdateFromBuf(MemoryBuffer@ buf) {
     auto mt = Editor::MacroblockSpecFromBuf(buf);
-    @lastDeleted = mt;
+    @lastRxDeleteMb = mt;
     return MTDeleteUpdate(mt);
 }
 
@@ -646,18 +819,20 @@ MsgMeta ReadMsgTail(Net::Socket@ socket) {
 
 class MsgMeta {
     string playerId;
+    string playerName;
     uint64 timestamp;
     MsgMeta(const string &in playerId, uint64 timestamp) {
         this.playerId = playerId;
         this.timestamp = timestamp;
+        if (g_MTConn !is null) playerName = g_MTConn.LookupName(playerId);
     }
 }
 
 const string ReadLPString(Net::Socket@ socket) {
     auto len = socket.ReadUint16();
-    // trace("Reading LPString: len = " + len);
+    // log_trace("Reading LPString: len = " + len);
     auto resp = socket.ReadRaw(len);
-    // trace("Read LPString: len = " + resp.Length);
+    // log_trace("Read LPString: len = " + resp.Length);
     return resp;
 }
 
@@ -705,34 +880,6 @@ nat3 ReadNat3FromBuffer(MemoryBuffer@ buf) {
     return nat3(x, y, z);
 }
 
-class PlayerJoinUpdate : MTUpdate {
-    string playerName;
-    PlayerJoinUpdate(MemoryBuffer@ buf) {
-        this.ty = MTUpdateTy::PlayerJoin;
-        playerName = ReadLPStringFromBuffer(buf);
-    }
-
-    bool Apply(CGameCtnEditorFree@ editor) override {
-        print('Applying player joined: ' + playerName);
-        if (g_MTConn !is null) g_MTConn.AddPlayer(PlayerInRoom(playerName, meta.playerId, meta.timestamp));
-        return false;
-    }
-}
-
-class PlayerLeaveUpdate : MTUpdate {
-    string playerName;
-    PlayerLeaveUpdate(MemoryBuffer@ buf) {
-        this.ty = MTUpdateTy::PlayerLeave;
-        playerName = ReadLPStringFromBuffer(buf);
-    }
-
-    bool Apply(CGameCtnEditorFree@ editor) override {
-        print('Applying player left: ' + playerName);
-        if (g_MTConn !is null) g_MTConn.RemovePlayer(meta.playerId);
-        return false;
-    }
-}
-
 enum PlayerUpdateTy {
     Cursor, Vehicle
 }
@@ -744,6 +891,12 @@ class PlayerInRoom {
     bool isMod;
     bool isAdmin;
     bool isLocal;
+    uint[] actionCounts;
+    uint blocksPlaced = 0;
+    uint blocksRemoved = 0;
+    uint itemsPlaced = 0;
+    uint itemsRemoved = 0;
+    uint skinsChanged = 0;
     // bool gameDead = false;
 
     PlayerUpdateTy lastUpdate = PlayerUpdateTy::Cursor;
@@ -757,6 +910,28 @@ class PlayerInRoom {
         this.isMod = false;
         this.isAdmin = false;
         isLocal = name == GetApp().LocalPlayerInfo.Name;
+        // need at least 16
+        actionCounts = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+    }
+
+    void UpdateStats(MTUpdate@ update) {
+        if (update is null) return;
+        if (uint(update.ty) >= actionCounts.Length) {
+            NotifyWarning("Invalid action type: " + uint(update.ty));
+            return;
+        }
+        actionCounts[uint(update.ty)]++;
+        if (update.ty == MTUpdateTy::Place) {
+            auto place = cast<MTPlaceUpdate>(update);
+            blocksPlaced += place.mb.Blocks.Length;
+            itemsPlaced += place.mb.Items.Length;
+        } else if (update.ty == MTUpdateTy::Delete) {
+            auto del = cast<MTDeleteUpdate>(update);
+            blocksRemoved += del.mb.Blocks.Length;
+            itemsRemoved += del.mb.Items.Length;
+        } else if (update.ty == MTUpdateTy::SetSkin) {
+            skinsChanged++;
+        }
     }
 
     void DrawStatusUI() {
@@ -765,11 +940,49 @@ class PlayerInRoom {
             UI::Text("Joined: " + Time::FormatString("%Y-%m-%d %H:%M:%S", joinTime / 1000));
             UI::Text("Last Update: " + tostring(lastUpdate));
             if (lastUpdate == PlayerUpdateTy::Cursor) {
+                UI::Text("In-Editor");
+                UI::Indent();
                 lastCamCursor.DrawUI();
+                UI::Unindent();
             } else {
+                UI::Text("In-Vehicle");
+                UI::Indent();
                 lastVehiclePos.DrawUI();
+                UI::Unindent();
+            }
+            if (UI::TreeNode("Actions Summary##"+id)) {
+                DrawStatsUI();
+                UI::TreePop();
             }
             UI::TreePop();
         }
     }
+
+    void DrawStatsUI() {
+        UI::Columns(2);
+        UI::Text("Blocks Placed");
+        UI::Text("Blocks Removed");
+        UI::Text("Items Placed");
+        UI::Text("Items Removed");
+        UI::Text("Skins Changed");
+        for (uint i = 0; i < actionCounts.Length; i++) {
+            UI::Text(tostring(MTUpdateTy(i)));
+        }
+        UI::NextColumn();
+        UI::Text(tostring(blocksPlaced));
+        UI::Text(tostring(blocksRemoved));
+        UI::Text(tostring(itemsPlaced));
+        UI::Text(tostring(itemsRemoved));
+        UI::Text(tostring(skinsChanged));
+        for (uint i = 0; i < actionCounts.Length; i++) {
+            UI::Text(tostring(actionCounts[i]));
+        }
+        UI::Columns(1);
+    }
+}
+
+enum RulesFlags {
+    AllowCustomItems = 1,
+    AllowSweeps = 2,
+    AllowSelectionCut = 3,
 }

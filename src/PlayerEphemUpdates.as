@@ -73,18 +73,24 @@ class PlayerCamCursor : MTUpdate, HasPlayerLabelDraw {
         auto _edit_mode = uint8(Editor::GetEditMode(editor));
         auto _cam_mat = cam.NextLocation;
         auto _target = editor.OrbitalCameraControl.m_TargetedPosition;
-        if (editor.CurrentBlockInfo !is null) {
-            cur_obj = editor.CurrentBlockInfo.IdName;
-        } else if (editor.CurrentGhostBlockInfo !is null) {
-            cur_obj = editor.CurrentGhostBlockInfo.IdName;
-        } else if (editor.CurrentItemModel !is null) {
-            cur_obj = editor.CurrentItemModel.IdName;
-        } else if (editor.CurrentMacroBlockInfo !is null) {
-            cur_obj = editor.CurrentMacroBlockInfo.IdName;
-        } else if (editor.CurrentTrafficItemModel !is null) {
-            cur_obj = editor.CurrentTrafficItemModel.IdName;
-        } else {
-            cur_obj = "";
+        if (_edit_mode == EditMode::Place) {
+            if (_place_mode == PlaceMode::Block && editor.CurrentBlockInfo !is null) {
+                cur_obj = editor.CurrentBlockInfo.IdName;
+            } else if (_place_mode == PlaceMode::FreeBlock && editor.CurrentGhostBlockInfo !is null) {
+                cur_obj = editor.CurrentGhostBlockInfo.IdName;
+            } else if (_place_mode == PlaceMode::GhostBlock && editor.CurrentGhostBlockInfo !is null) {
+                cur_obj = editor.CurrentGhostBlockInfo.IdName;
+            } else if (_place_mode == PlaceMode::Item && editor.CurrentItemModel !is null) {
+                cur_obj = editor.CurrentItemModel.IdName;
+            } else if (_place_mode == PlaceMode::Macroblock && editor.CurrentMacroBlockInfo !is null) {
+                cur_obj = editor.CurrentMacroBlockInfo.IdName;
+            } else if (_place_mode == PlaceMode::FreeMacroblock && editor.CurrentMacroBlockInfo !is null) {
+                cur_obj = editor.CurrentMacroBlockInfo.IdName;
+            } else if (_place_mode == PlaceMode::Path && editor.CurrentTrafficItemModel !is null) {
+                cur_obj = editor.CurrentTrafficItemModel.IdName;
+            } else {
+                cur_obj = "";
+            }
         }
 
         if (edit_mode != _edit_mode || place_mode != _place_mode || !MathX::Nat3Eq(coord, _coord) || !MathX::Vec3Eq(pos, _pos) || !MathX::Vec3Eq(target, _target)

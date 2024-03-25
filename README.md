@@ -14,13 +14,32 @@ GL HF
 
 
 todo:
+recent:
+- [x] disable sweeps
+- [x] server issue limiting to 25 blocks, only triggers more on update
+- [x] limited undo support
+- [x] server: map size, base/mood, car, rules_flags,
+- [ ] better UI
+- [x] create map base
+- [ ] ping messages every 2s or so
+- [ ] timeout detection
+- [ ] player join leave announcements (tmx together rip)
+- [ ] player stats (total placed, deleted, time spent, etc)
+- [ ] admin tools (kick / ban)
+- [ ] status hud (processing updates)
+- [ ] follow mode (control camera)
+- [ ] time of day update msgs
+- [ ] custom items
+
+
 - [x] block/prevent undo redo
 - [x] detect test mode and session, only update after
 - [x] add server choice
 - [x] svr: remove players
 - [x] svr: parallel reads / per player
 
-- server issue limiting to 25 blocks, only triggers more on update
+- follow mode -- update camera to match user
+
 
 - version checking
   - can abuse bad room id for version?
@@ -30,17 +49,18 @@ todo:
   - map base size
   - map mood
   - set car (stadium / rally / snow / desert)
+  - block delete all
 
 - reconnect to server issue on desync (then it rebuilds)
   - avoid rebuild (use autosave with sequence number?)
   - avoid needing to restart map at all (detect desync and reapply actions)
 
-- laggy when building together after a while
+- grand2020: laggy when building together after a while
 - (this is okay) test driving updates when you leave
 
 - optimize loading prior map, break into chunks
 - add autosave or saved map pre-upload / download to avoid replaying history
-  - require sequence numbers
+  - requires sequence numbers
 
 - clear all locked down
 - undo capacity for admin / mods
