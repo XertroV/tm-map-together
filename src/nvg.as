@@ -21,6 +21,8 @@ const vec4 cDarkPurpleRed = vec4(0.203f, 0.014f, 0.119f, 1.000f);
 const vec4 cDarkBlue = vec4(0.008f, 0.164f, 0.251f, 1.000f);
 const vec4 cMidDarkRed = vec4(0.458f, 0.048f, 0.048f, 1.000f);
 const vec4 cDarkGreen = vec4(0.018f, 0.258f, 0.008f, 1.000f);
+const vec4 cDarkYellow = vec4(0.258f, 0.258f, 0.008f, 1.000f);
+const vec4 cDarkPink = vec4(0.258f, 0.008f, 0.258f, 1.000f);
 
 
 // this does not seem to be expensive

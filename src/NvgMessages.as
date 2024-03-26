@@ -92,7 +92,6 @@ class StatusMsgs {
 class StatusMsgUI {
     StatusMsgs state;
 
-
     void AddGameEvent(MTGameEvent@ event) {
         if (!S_StatusEventsOnScreen) return;
         state.AddGameEvent(event);

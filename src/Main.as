@@ -17,14 +17,28 @@ void Render() {
 
 
 MapTogetherConnection@ g_MTConn = null;
+PlayerInRoom@ g_CamLockedToPlayer = null;
 
 int f_Nvg_Montserrat;
+
+UI::Font@ g_MonoFont;
+UI::Font@ g_BoldFont;
+UI::Font@ g_BigFont;
+UI::Font@ g_MidFont;
+
+void LoadFonts() {
+    @g_BoldFont = UI::LoadFont("DroidSans-Bold.ttf");
+    @g_MonoFont = UI::LoadFont("DroidSansMono.ttf");
+    @g_BigFont = UI::LoadFont("DroidSans.ttf", 26);
+    @g_MidFont = UI::LoadFont("DroidSans.ttf", 20);
+}
 
 void Main() {
     // CheckTokenUpdate();
     // Notify("Got token");
     // startnew(ConnectToMapTogether);
     f_Nvg_Montserrat = nvg::LoadFont("Montserrat-SemiBoldItalic.ttf");
+    startnew(LoadFonts);
     yield();
     m_Size.x = m_SizeX;
     m_Size.y = m_SizeY;
@@ -72,10 +86,12 @@ bool IsTestingOrValidating;
 bool IsLoading;
 bool IsMenuDialogShown;
 ActionMap CurrActionMap;
+bool IsOpenplanetOverlayShown;
 
 void RenderEarly() {
     // if (g_MTConn is null) return;
     UpdateGraphicsValues();
+    IsOpenplanetOverlayShown = UI::IsOverlayShown();
     auto app = GetApp();
     if (app.Switcher.ModuleStack.Length > 0) {
         IsInMainMenu = cast<CTrackManiaMenus>(app.Switcher.ModuleStack[0]) !is null
@@ -126,6 +142,13 @@ void Update(float dt) {
     lastDt = dt;
 }
 
+void UnlockEditorCamera() {
+    if (g_CamLockedToPlayer !is null) {
+        g_CamLockedToPlayer.UnlockCamera();
+        @g_CamLockedToPlayer = null;
+    }
+}
+
 void Render() {
     if (g_MTConn !is null) {
         g_MTConn.RenderPlayersNvg();
@@ -134,8 +157,24 @@ void Render() {
     if (S_StatusEventsOnScreen && g_MTConn !is null) {
         g_MTConn.statusMsgs.RenderUpdate(lastDt);
     }
-    RenderMainWindow();
+    if (IsOpenplanetOverlayShown)
+        RenderMainWindow();
+    if (g_CamLockedToPlayer !is null) {
+        if (GetApp().Editor is null) {
+            UnlockEditorCamera();
+        } else {
+            UI::PushFont(g_MidFont);
+            if (UI::Begin("Editor Camera Locked", UI::WindowFlags::AlwaysAutoResize | UI::WindowFlags::NoCollapse)) {
+                if (UI::Button("Unlock Camera from " + g_CamLockedToPlayer.name)) {
+                    UnlockEditorCamera();
+                }
+            }
+            UI::End();
+            UI::PopFont();
+        }
+    }
     // todo: check if connected and applying actions. if so, draw a status indicator
+
 }
 
 void RenderMainWindow() {

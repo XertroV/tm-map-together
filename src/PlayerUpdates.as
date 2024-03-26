@@ -194,6 +194,7 @@ class SetActionLimitUpdate : MTUpdate {
             }
             log_info('Applying set action limit: ' + limit);
             g_MTConn.actionRateLimit = limit;
+            g_MTConn.statusMsgs.AddGameEvent(MTEventAdminSetActionLimit(meta.playerName, limit));
         }
         return false;
     }

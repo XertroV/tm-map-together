@@ -331,5 +331,4 @@ void UndoRestrictionPatches() {
 }
 
 
-
 #endif

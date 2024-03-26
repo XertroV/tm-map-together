@@ -27,6 +27,7 @@ void DrawRoomMenuChoiceMain() {
         UI::EndCombo();
     }
     if (g_MenuState == MenuState::None) {
+        UI::Separator();
         UI::AlignTextToFramePadding();
         UI::Text("NEW ROOM");
 
@@ -55,6 +56,13 @@ void DrawRoomMenuChoiceMain() {
             g_MenuState = MenuState::RoomJoinExisting;
         }
         UI::EndDisabled();
+        UI::Dummy(vec2(0, 10));
+        UI::Separator();
+        UI::Dummy(vec2(0, 10));
+        UI::TextWrapped("Map Together: a multiplayer editor plugin for Trackmania 2020, by " + XERTROV_COLOR_NAME + ".");
+        UI::Markdown("[Openplanet Plugin Page](https://openplanet.dev/plugin/map-together)");
+        UI::Separator();
+        UI::Markdown("Please consider donating to [server costs](https://paypal.me/xertrov) and ["+Icons::Heartbeat+" Openplanet](https://www.patreon.com/openplanet).");
     } else if (g_MenuState != MenuState::RoomConnectingOrRunning) {
         UI::SameLine();
         if (UI::Button("Back")) {

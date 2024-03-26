@@ -21,5 +21,7 @@ void DrawLimitationsTab() {
         "GL HF\n\n"
     );
     UI::Dummy(vec2(0, 0));
-    UI::Text("\t— \\$s\\$170\\$17bX\\$379e\\$567r\\$866t\\$a64r\\$c50o\\$e50V");
+    UI::Text("\t— \\$s" + XERTROV_COLOR_NAME);
 }
+
+const string XERTROV_COLOR_NAME = "\\$17bX\\$379e\\$567r\\$866t\\$a64r\\$c50o\\$e50V";

@@ -119,22 +119,23 @@ class PlayerCamCursor : MTUpdate, HasPlayerLabelDraw {
         UI::Text("Cam Pos: " + vec3(cam_matrix.tx, cam_matrix.ty, cam_matrix.tz).ToString());
     }
 
-    vec3 screenTextPos;
-    vec3 lastScreenTextPos;
-    vec3 drawAtWorldPos;
-
     void RenderNvg(const string &in name) {
         bool isPlacing = this.edit_mode == EditMode::Place;
         bool isPlacingCoord = this.place_mode == PlaceMode::Block || this.place_mode == PlaceMode::Macroblock || this.place_mode == PlaceMode::GhostBlock;
         bool isErasing = this.edit_mode == EditMode::Erase;
         bool isPicking = this.edit_mode == EditMode::Pick;
+        bool isFreeLook = this.edit_mode == EditMode::FreeLook;
+        bool isSelecting = this.edit_mode == EditMode::SelectionAdd || this.edit_mode == EditMode::SelectionRemove;
+        bool isSkinning = this.edit_mode == EditMode::Place && this.place_mode == PlaceMode::Skin;
+
         // isPlacingCoord = isPlacingCoord;
         bool isPlacingFree = this.place_mode == PlaceMode::FreeBlock || this.place_mode == PlaceMode::FreeMacroblock || this.place_mode == PlaceMode::Item;
         // bool isDelFree = this.edit_mode == EditMode::Erase && isPlacingFree;
         // isPlacingFree = isPlacingFree;
         drawAtWorldPos = target;
-        if (isPlacing || isPicking || isErasing) {
-            if (isPlacingCoord || isPicking || isErasing) {
+        bool shouldUseCoord = isPicking || isErasing || isSelecting || isSkinning;
+        if (isPlacing || shouldUseCoord) {
+            if (isPlacingCoord || shouldUseCoord) {
                 drawAtWorldPos = CoordToPos(this.coord) + vec3(16, 4, 16);
             } else if (isPlacingFree) {
                 drawAtWorldPos = this.pos;
@@ -143,12 +144,18 @@ class PlayerCamCursor : MTUpdate, HasPlayerLabelDraw {
         screenTextPos = Camera::ToScreen(drawAtWorldPos);
         bool drawCamAndTarget = screenTextPos.z < 0.0;
         if (lastScreenTextPos.LengthSquared() > 1.0) {
-            screenTextPos = Math::Lerp(lastScreenTextPos, screenTextPos, 0.1);
+            screenTextPos = Math::Lerp(lastScreenTextPos, screenTextPos, 1. - Math::Exp(animLambda * lastDt * 0.001));
         }
         lastScreenTextPos = screenTextPos;
         vec4 bgCol = cBlack;
         if (isPicking) {
             bgCol = cDarkGreen * vec4(1, 1, 1, .9);
+        } else if (isFreeLook) {
+            // nothing
+        } else if (isSkinning) {
+            bgCol = cDarkPink * vec4(1, 1, 1, .9);
+        } else if (isSelecting) {
+            bgCol = cDarkYellow * vec4(1, 1, 1, .9);
         } else if (isErasing) {
             bgCol = cMidDarkRed * vec4(1, 1, 1, .9);
         } else if (isPlacingCoord) {
@@ -166,6 +173,11 @@ class PlayerCamCursor : MTUpdate, HasPlayerLabelDraw {
 
 mixin class HasPlayerLabelDraw {
     vec2 textBounds;
+    vec3 screenTextPos;
+    vec3 lastScreenTextPos;
+    vec3 drawAtWorldPos;
+    // more negative = faster movement
+    float animLambda = -10.0;
 
     void DrawPlayerLabel(const string &in name, vec2 textPos, const vec4 &in fg, const vec4 &in bg) {
         auto labelPos = textPos;
@@ -273,8 +285,12 @@ class VehiclePos : MTUpdate, HasPlayerLabelDraw {
         auto pos = vec3(mat.tx, mat.ty, mat.tz);
         auto screenPos = Camera::ToScreen(pos);
         if (screenPos.z > 0.0) return;
-        DrawPlayerLabel(name, screenPos.xy, cWhite, cRed25);
-        nvgDrawPointCross(screenPos.xy, S_PlayerLabelHeight * .5, cLimeGreen);
+
+        screenTextPos = Math::Lerp(lastScreenTextPos, screenPos, 1. - Math::Exp(animLambda * lastDt * 0.001));
+        if (lastScreenTextPos.LengthSquared() == 0) lastScreenTextPos = screenTextPos;
+        lastScreenTextPos = screenTextPos;
+        DrawPlayerLabel(name, screenTextPos.xy, cWhite, cRed25);
+        nvgDrawPointCross(screenTextPos.xy, S_PlayerLabelHeight * .5, cLimeGreen);
     }
 }
 

@@ -26,10 +26,11 @@ recent:
 - [x] player join leave announcements (tmx together rip)
 - [ ] player stats (total placed, deleted, time spent, etc)
 - [ ] admin tools (kick / ban)
-- [ ] status hud (processing updates)
-- [ ] follow mode (control camera)
+- [x] status hud (processing updates) - pending updates hud
+- [x] follow mode (control camera)
 - [ ] time of day update msgs
 - [ ] custom items
+- [ ] server update msgs (alerts to active users that server will be going down)
 
 
 - [x] block/prevent undo redo

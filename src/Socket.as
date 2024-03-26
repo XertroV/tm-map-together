@@ -646,6 +646,7 @@ class MapTogetherConnection {
 
     void RenderStatusHUD() {
         if (!S_RenderStatusHUD) return;
+        RenderMessagesUpdateStatus();
     }
 
 
@@ -715,6 +716,31 @@ class MapTogetherConnection {
             log_warn("Mismatched update type: " + tostring(update.ty) + " != " + tostring(ty));
         }
         return update;
+    }
+
+    void RenderMessagesUpdateStatus() {
+        auto nbPending = pendingUpdates.Length;
+        vec4 textCol = cWhite;
+        vec4 strokeCol = cBlack;
+        if (nbPending == 0) {
+            textCol = cWhite25;
+            strokeCol = cBlack25;
+        }
+        vec2 textPos = g_screen - vec2(0.02, 0.98) * g_screen.y;
+        nvg::Reset();
+        nvg::BeginPath();
+        nvg::FontSize(playerLabelBaseHeight * 2.0);
+        nvg::FontFace(f_Nvg_Montserrat);
+        nvg::TextAlign(nvg::Align::Right | nvg::Align::Top);
+        DrawTextWithShadow(textPos, tostring(nbPending) + " Pending Actions", textCol, playerLabelBaseHeight * 0.2, strokeCol);
+        nvg::ClosePath();
+        // if (UI::Begin("nvg debug player status")) {
+        //     UI::Text("Pending Updates: " + nbPending);
+        //     UI::Text("Text pos: " + textPos.ToString());
+        //     UI::Text("Text col: " + textCol.ToString());
+        //     UI::Text("fs: " + playerLabelBaseHeight * 2.0);
+        // }
+        // UI::End();
     }
 
 }
@@ -991,6 +1017,48 @@ class PlayerInRoom {
             skinsChanged++;
         }
     }
+
+
+    void FocusEditorCamera(bool lockCam = false) {
+        if (lastUpdate == PlayerUpdateTy::Cursor) {
+            auto camPos = vec3(lastCamCursor.cam_matrix.tx, lastCamCursor.cam_matrix.ty, lastCamCursor.cam_matrix.tz);
+            auto targetPos = lastCamCursor.target;
+            float targetDist = (targetPos - camPos).Length();
+            mat4 translation = mat4::Translate(camPos);
+            mat4 camMat = mat4(lastCamCursor.cam_matrix);
+            auto camRot = mat4::Inverse(mat4::Inverse(translation) * camMat);
+            auto pyr = PitchYawRollFromRotationMatrix(camRot);
+            Editor::SetCamAnimationGoTo(vec2(pyr.y, pyr.x), targetPos, targetDist);
+        } else {
+            auto editor = cast<CGameCtnEditorFree>(GetApp().Editor);
+            if (editor !is null) {
+                auto camPos = editor.OrbitalCameraControl.Pos;
+                auto vMat = lastVehiclePos.mat;
+                auto vPos = vec3(vMat.tx, vMat.ty, vMat.tz);
+                Editor::SetCamAnimationGoTo(DirToLookUv((vPos - camPos).Normalized()), vPos, 90);
+            }
+        }
+        if (lockCam) {
+            UnlockEditorCamera();
+            startnew(CoroutineFunc(this.LockEditorCameraLoop));
+        }
+    }
+
+    bool lockingEditorCamera = true;
+    // the local player locked their camera to this player
+    void LockEditorCameraLoop() {
+        lockingEditorCamera = true;
+        while (lockingEditorCamera) {
+            @g_CamLockedToPlayer = this;
+            FocusEditorCamera();
+            yield();
+        }
+    }
+
+    void UnlockCamera() {
+        lockingEditorCamera = false;
+    }
+
 
     void DrawStatusUI() {
         if (UI::TreeNode("Player: " + name)) {
