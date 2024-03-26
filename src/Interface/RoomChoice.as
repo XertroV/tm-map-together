@@ -27,6 +27,9 @@ void DrawRoomMenuChoiceMain() {
         UI::EndCombo();
     }
     if (g_MenuState == MenuState::None) {
+        UI::AlignTextToFramePadding();
+        UI::Text("NEW ROOM");
+
         UI::BeginDisabled(!IsInMainMenu);
         if (UI::Button("Create New Map + Room")) {
             g_MenuState = MenuState::RoomCreate;
@@ -37,6 +40,11 @@ void DrawRoomMenuChoiceMain() {
             g_MenuState = MenuState::RoomInvite;
         }
         UI::EndDisabled();
+
+        UI::Separator();
+        UI::AlignTextToFramePadding();
+        UI::Text("JOIN ROOM");
+
         UI::BeginDisabled(!IsInMainMenu);
         if (UI::Button("Join Map Room")) {
             g_MenuState = MenuState::RoomJoin;
@@ -110,7 +118,7 @@ void ConnectToMapTogether_FreshMap() {
         @g_MTConn = null;
     }
     startnew(OnNewRoom_EditorOpenNewMap);
-    @g_MTConn = MapTogetherConnection(m_Password, false, m_newRoomActionLimit, m_Size, m_Base, m_Car, CalcRulesFlagFromForm(), m_ItemMaxSize);
+    @g_MTConn = MapTogetherConnection(m_Password, false, m_newRoomActionLimit, m_Size, m_Mood | m_Base, m_Car, CalcRulesFlagFromForm(), m_ItemMaxSize);
 }
 
 uint8 CalcRulesFlagFromForm() {
@@ -127,7 +135,7 @@ void InviteToMapTogetherRoom_ExistingMap() {
         g_MTConn.Close();
         @g_MTConn = null;
     }
-    @g_MTConn = MapTogetherConnection(m_Password, true, m_newRoomActionLimit, m_Size, m_Base, m_Car, CalcRulesFlagFromForm(), m_ItemMaxSize);
+    @g_MTConn = MapTogetherConnection(m_Password, true, m_newRoomActionLimit, m_Size, m_Mood | m_Base, m_Car, CalcRulesFlagFromForm(), m_ItemMaxSize);
 }
 
 void JoinMapTogetherRoom() {
@@ -189,18 +197,19 @@ void OnJoinRoom_EditorOpenNewMap() {
     while (g_MTConn !is null && g_MTConn.roomId.Length == 0) {
         yield();
     }
-    if (g_MTConn !is null) {
+    if (g_MTConn !is null && g_MTConn.IsConnected) {
         auto size = g_MTConn.mapSize;
         // todo: support more map bases; bit flags (high) after
-        auto base = MapBase::Stadium155;
+        auto base = g_MTConn.mapBase >= 32 ? MapBase(g_MTConn.mapBase & 0b11100000) : MapBase::Stadium155;
         auto mood = g_MTConn.mapBase & 3;
         auto car = g_MTConn.baseCar;
         EditNewMapFrom(base, MapMood(mood), MapCar(car), size);
     } else {
         NotifyError("Failed to join room");
     }
-
 }
+
+
 void OnNewRoom_EditorOpenNewMap() {
     // todo: edit new map
     auto size = m_Size;
@@ -235,59 +244,22 @@ string BaseAndMoodToDecoId(MapBase base, MapMood mood) {
             }
     }
     NotifyWarning("BaseAndMoodToDecoId: Unknown base and mood: " + base + ", " + mood);
-    return "NoStadium48x48Day";
+    return "Base48x48Screen155Day";
 }
 
 string BaseAndMoodToDecoMood(MapBase base, MapMood mood) {
+    // 48x48Night 48x48Day 48x48Screen155Day 48x48Screen155Night 48x48Screen155Sunrise 48x48Screen155Sunset 48x48Sunrise 48x48Sunset NoStadium48x48Day NoStadium48x48Night NoStadium48x48Sunrise NoStadium48x48Sunset
+    if (base == MapBase::StadiumOld) {
+        switch (mood) {
+            case MapMood::Day: return "48x48Day"; // 48x48Day / Base48x48Day
+            case MapMood::Night: return "48x48Night";
+            case MapMood::Sunset: return "Sunset";
+            case MapMood::Sunrise: return "Sunrise";
+        }
+    }
     auto ret = BaseAndMoodToDecoId(base, mood);
     if (ret.StartsWith("Base")) {
         return ret.SubStr(4);
     }
     return ret;
-}
-
-
-nat3 decoOrigSize;
-
-void EditNewMapFrom(MapBase base, MapMood mood, MapCar vehicle, nat3 size) {
-    auto decoId = BaseAndMoodToDecoId(base, mood);
-    auto fid = Fids::GetGame("GameData/Stadium/GameCtnDecoration/" + decoId + ".Decoration.Gbx");
-    auto deco = cast<CGameCtnDecoration>(Fids::Preload(fid));
-    decoOrigSize.x = deco.DecoSize.SizeX;
-    decoOrigSize.y = deco.DecoSize.SizeY;
-    decoOrigSize.z = deco.DecoSize.SizeZ;
-    deco.DecoSize.SizeX = size.x;
-    deco.DecoSize.SizeY = size.y;
-    deco.DecoSize.SizeZ = size.z;
-
-    CTrackMania@ app = cast<CTrackMania>(GetApp());
-    if (app.ManiaTitleControlScriptAPI is null) {
-        return;
-    }
-
-    if (m_DisableClubItems_Patch) {
-        Patch_DisableClubFavItems.Apply();
-    } else if (m_EnableClubItemsSkip) {
-        Patch_SkipClubFavItemUpdate.Apply();
-    }
-
-    trace("Calling EditNewMap2(" + decoId + ", " + tostring(vehicle) + ")");
-    trace("deco id name: " + deco.IdName);
-    app.ManiaTitleControlScriptAPI.EditNewMap2(
-        // m_Base == MapBase::NoStadium ? "NoStadium" : "Stadium",
-        "Stadium",
-        deco.IdName,
-        "",
-        tostring(vehicle),
-        "", false, "", ""
-    );
-
-    while (app.Editor is null) yield();
-    Patch_DisableClubFavItems.Unapply();
-    Patch_SkipClubFavItemUpdate.Unapply();
-
-    while (app.Editor !is null) yield();
-    deco.DecoSize.SizeX = decoOrigSize.x;
-    deco.DecoSize.SizeY = decoOrigSize.y;
-    deco.DecoSize.SizeZ = decoOrigSize.z;
 }

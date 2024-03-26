@@ -23,7 +23,7 @@ recent:
 - [x] create map base
 - [ ] ping messages every 2s or so
 - [ ] timeout detection
-- [ ] player join leave announcements (tmx together rip)
+- [x] player join leave announcements (tmx together rip)
 - [ ] player stats (total placed, deleted, time spent, etc)
 - [ ] admin tools (kick / ban)
 - [ ] status hud (processing updates)

@@ -25,9 +25,13 @@ void Main() {
     // Notify("Got token");
     // startnew(ConnectToMapTogether);
     f_Nvg_Montserrat = nvg::LoadFont("Montserrat-SemiBoldItalic.ttf");
+    yield();
+    m_Size.x = m_SizeX;
+    m_Size.y = m_SizeY;
+    m_Size.z = m_SizeZ;
 }
 
-
+[Setting hidden]
 bool g_WindowOpen = true;
 
 const string PLUGIN_ICON = "\\$d9F" + Icons::MapO + Icons::Times + Icons::Users;
@@ -116,11 +120,19 @@ enum ActionMap {
     Vehicle,
 }
 
+float lastDt;
+
+void Update(float dt) {
+    lastDt = dt;
+}
 
 void Render() {
     if (g_MTConn !is null) {
         g_MTConn.RenderPlayersNvg();
         g_MTConn.RenderStatusHUD();
+    }
+    if (S_StatusEventsOnScreen && g_MTConn !is null) {
+        g_MTConn.statusMsgs.RenderUpdate(lastDt);
     }
     RenderMainWindow();
     // todo: check if connected and applying actions. if so, draw a status indicator
@@ -128,6 +140,7 @@ void Render() {
 
 void RenderMainWindow() {
     if (!g_WindowOpen) return;
+    UI::SetNextWindowSize(400, 400, UI::Cond::FirstUseEver);
     // "Map Together  \\$aaa(by XertroV)"
     if (UI::Begin(S_NiceName ? PLUGIN_WINDOW_NAME : PLUGIN_WINDOW_NAME_STRIPPED, g_WindowOpen)) {
         UI::BeginTabBar("mt-main-tabs", UI::TabBarFlags::None);
@@ -236,6 +249,7 @@ void DrawMainUI_Inner() {
         UI::Text("\\$aaaEnter the editor if it gets stuck.");
         if (g_MTConn !is null) {
             UI::Text("Connected to " + g_MTConn.remote_domain);
+            UI::Text("Status: " + tostring(g_ConnectionStage));
             if (UI::Button("Disconnect")) {
                 g_MTConn.Close();
                 @g_MTConn = null;
@@ -243,6 +257,7 @@ void DrawMainUI_Inner() {
             }
         } else {
             UI::Text("Connecting...");
+            UI::Text("Status: " + tostring(g_ConnectionStage));
             if (UI::Button("Reset")) {
                 IS_CONNECTING = false;
                 // this crashed the game i think b/c of some race condition nullifying and instantiating
@@ -536,6 +551,25 @@ void dev_trace(const string &in msg) {
 #endif
 }
 
+
+
+
+void SetLoadingScreenText(const string &in text, const string &in secondaryText = "Initializing...") {
+    auto fm = GetApp().LoadProgress.FrameManialink;
+    if (fm is null) return;
+    if (fm.Childs.Length == 0) return;
+    auto c1 = cast<CControlFrame>(fm.Childs[0]);
+    if (c1 is null || c1.Childs.Length == 0) return;
+    auto c2 = cast<CControlFrame>(c1.Childs[0]);
+    if (c2 is null || c2.Childs.Length < 2) return;
+    auto label = cast<CControlLabel>(c2.Childs[1]);
+    if (label is null) return;
+    label.Label = text;
+    if (c2 is null || c2.Childs.Length < 3) return;
+    auto secLabel = cast<CControlLabel>(c2.Childs[2]);
+    if (secLabel is null) return;
+    secLabel.Label = secondaryText;
+}
 
 
 

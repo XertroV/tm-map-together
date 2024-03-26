@@ -222,7 +222,7 @@ namespace Editor {
                 uint startPlacing = Time::Now;
                 uint maxPlacingTime = startPlacing + 1500;
                 bool autosave = false;
-                for (uint i = 0; i < nbPendingUpdates; i++) {
+                for (int i = 0; i < nbPendingUpdates; i++) {
                     if (maxPlacingTime < Time::Now) {
                         auto remainingUpdates = nbPendingUpdates - i;
                         auto timeTaken = Time::Now - startPlacing;

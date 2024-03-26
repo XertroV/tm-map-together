@@ -25,10 +25,23 @@ bool m_AllowCustomItems = false;
 bool m_AllowSweeps = false;
 // ignore for the moment
 bool m_AllowSelectionCut = false;
+[Setting hidden]
 MapMood m_Mood = MapMood::Day;
+[Setting hidden]
 MapBase m_Base = MapBase::Stadium155;
+[Setting hidden]
 MapCar m_Car = MapCar::CarSport;
+
 nat3 m_Size = nat3(48, 255, 48);
+
+[Setting hidden]
+uint m_SizeX = 48;
+[Setting hidden]
+uint m_SizeY = 255;
+[Setting hidden]
+uint m_SizeZ = 48;
+
+
 uint m_ItemMaxSize = 0;
 
 void DrawCreateRoomForm_SetAll() {
@@ -68,8 +81,10 @@ bool m_DisableClubItems_Patch = false;
 void DrawCreateRoomForm_PatchOptions() {
     UI::Separator();
     UI::Text("Patch Options");
-    UI::Checkbox("Skip Checking Club Item Updates", m_EnableClubItemsSkip);
-    UI::Checkbox("Disable Club Items (very fast)", m_DisableClubItems_Patch);
+    m_DisableClubItems_Patch = UI::Checkbox("Disable Club Items (very fast)", m_DisableClubItems_Patch);
+    UI::BeginDisabled(m_DisableClubItems_Patch);
+    m_EnableClubItemsSkip = UI::Checkbox("Skip Checking Club Item Updates", m_EnableClubItemsSkip);
+    UI::EndDisabled();
     UI::Separator();
 }
 
@@ -91,6 +106,18 @@ MapMood MapDecoToMood(CGameCtnDecoration@ deco) {
         return MapMood::Sunrise;
     }
     return MapMood::Day;
+}
+
+
+MapBase EncodedMapBaseToName(uint8 enc) {
+    if (enc == 32) return MapBase::NoStadium;
+    if (enc == 64) return MapBase::StadiumOld;
+    if (enc == 128) return MapBase::Stadium155;
+    return MapBase::Stadium155;
+}
+
+MapMood EncodedMapBaseToMood(uint8 enc) {
+    return MapMood(enc & 3);
 }
 
 MapBase MapDecoToBase(CGameCtnDecoration@ deco) {
@@ -136,7 +163,8 @@ void DrawCreateRoomForm_TopPart() {
     UI::SameLine();
     if (UI::Button(Icons::Refresh+"##gen-pw")) {
         m_Password = Crypto::MD5(tostring('' + Math::Rand(-2147483648, 2147483647) + Time::Now + Math::Rand(-2147483648, 2147483647))).SubStr(0, 8);
-        Notify("Generated new password");
+        Notify("Generated and copied new password");
+        IO::SetClipboard(m_Password);
     }
     UI::SameLine();
     if (UI::Button(Icons::FilesO+"##copy-pw")) {
@@ -176,15 +204,15 @@ void DrawCreateRoomForm_BottomPart_Mutable() {
 
     // Base
     if (UI::BeginCombo("Map Base", tostring(m_Base))) {
-        // if (UI::Selectable("No Stadium", m_Base == MapBase::NoStadium)) {
-        //     m_Base = MapBase::NoStadium;
-        // }
+        if (UI::Selectable("No Stadium", m_Base == MapBase::NoStadium)) {
+            m_Base = MapBase::NoStadium;
+        }
         if (UI::Selectable("Stadium 155", m_Base == MapBase::Stadium155)) {
             m_Base = MapBase::Stadium155;
         }
-        // if (UI::Selectable("Stadium Old", m_Base == MapBase::StadiumOld)) {
-        //     m_Base = MapBase::StadiumOld;
-        // }
+        if (UI::Selectable("Stadium Old", m_Base == MapBase::StadiumOld)) {
+            m_Base = MapBase::StadiumOld;
+        }
         UI::EndCombo();
     }
 
@@ -199,8 +227,10 @@ void DrawCreateRoomForm_BottomPart_Mutable() {
         if (UI::Selectable("Rally", m_Car == MapCar::CarRally)) {
             m_Car = MapCar::CarRally;
         }
-        if (UI::Selectable("Desert", m_Car == MapCar::CarDesert)) {
-            m_Car = MapCar::CarDesert;
+        if (Time::Stamp > 1712008800) {
+            if (UI::Selectable("Desert", m_Car == MapCar::CarDesert)) {
+                m_Car = MapCar::CarDesert;
+            }
         }
         UI::EndCombo();
     }
@@ -215,11 +245,44 @@ void DrawCreateRoomForm_BottomPart_Mutable() {
     UI::SameLine();
     m_Size.z = Math::Clamp(TryParseUint8(UI::InputText("##mapsize-z", tostring(m_Size.z)), m_Size.z), 8, 255);
     UI::SameLine();
+    m_SizeX = m_Size.x;
+    m_SizeY = m_Size.y;
+    m_SizeZ = m_Size.z;
     UI::Text("Size (X Y Z)");
+    UI::SameLine();
+    if (UI::Button("48²")) {
+        m_Size.x = 48;
+        m_Size.y = 255;
+        m_Size.z = 48;
+    }
+    UI::SameLine();
+    if (UI::Button("64²")) {
+        m_Size.x = 64;
+        m_Size.y = 255;
+        m_Size.z = 64;
+    }
+    UI::SameLine();
+    if (UI::Button("80²")) {
+        m_Size.x = 80;
+        m_Size.y = 255;
+        m_Size.z = 80;
+    }
+    UI::SameLine();
+    if (UI::Button("128²")) {
+        m_Size.x = 128;
+        m_Size.y = 255;
+        m_Size.z = 128;
+    }
+    UI::SameLine();
+    if (UI::Button("255²")) {
+        m_Size.x = 255;
+        m_Size.y = 255;
+        m_Size.z = 255;
+    }
     UI::PopItemWidth();
 }
 
-uint8 TryParseUint8(string str, uint8 defaultValue) {
+uint8 TryParseUint8(const string &in str, uint8 defaultValue) {
     uint32 result = defaultValue;
     if (str != "") {
         try {

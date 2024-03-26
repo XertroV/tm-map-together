@@ -119,16 +119,47 @@ class PlayerCamCursor : MTUpdate, HasPlayerLabelDraw {
         UI::Text("Cam Pos: " + vec3(cam_matrix.tx, cam_matrix.ty, cam_matrix.tz).ToString());
     }
 
+    vec3 screenTextPos;
     vec3 lastScreenTextPos;
+    vec3 drawAtWorldPos;
 
     void RenderNvg(const string &in name) {
         bool isPlacing = this.edit_mode == EditMode::Place;
         bool isPlacingCoord = this.place_mode == PlaceMode::Block || this.place_mode == PlaceMode::Macroblock || this.place_mode == PlaceMode::GhostBlock;
-        lastScreenTextPos = Camera::ToScreen(target);
-        bool drawCamAndTarget = lastScreenTextPos.z < 0.0;
+        bool isErasing = this.edit_mode == EditMode::Erase;
+        bool isPicking = this.edit_mode == EditMode::Pick;
+        // isPlacingCoord = isPlacingCoord;
+        bool isPlacingFree = this.place_mode == PlaceMode::FreeBlock || this.place_mode == PlaceMode::FreeMacroblock || this.place_mode == PlaceMode::Item;
+        // bool isDelFree = this.edit_mode == EditMode::Erase && isPlacingFree;
+        // isPlacingFree = isPlacingFree;
+        drawAtWorldPos = target;
+        if (isPlacing || isPicking || isErasing) {
+            if (isPlacingCoord || isPicking || isErasing) {
+                drawAtWorldPos = CoordToPos(this.coord) + vec3(16, 4, 16);
+            } else if (isPlacingFree) {
+                drawAtWorldPos = this.pos;
+            }
+        }
+        screenTextPos = Camera::ToScreen(drawAtWorldPos);
+        bool drawCamAndTarget = screenTextPos.z < 0.0;
+        if (lastScreenTextPos.LengthSquared() > 1.0) {
+            screenTextPos = Math::Lerp(lastScreenTextPos, screenTextPos, 0.1);
+        }
+        lastScreenTextPos = screenTextPos;
+        vec4 bgCol = cBlack;
+        if (isPicking) {
+            bgCol = cDarkGreen * vec4(1, 1, 1, .9);
+        } else if (isErasing) {
+            bgCol = cMidDarkRed * vec4(1, 1, 1, .9);
+        } else if (isPlacingCoord) {
+            bgCol = cDarkPurpleRed * vec4(1, 1, 1, .9);
+        } else if (isPlacingFree) {
+            bgCol = cDarkBlue * vec4(1, 1, 1, .9);
+        }
+
         // if ()
         if (drawCamAndTarget) {
-            DrawPlayerLabel(name, lastScreenTextPos.xy, cWhite, cBlack);
+            DrawPlayerLabel(name, lastScreenTextPos.xy, cWhite, bgCol);
         }
     }
 }

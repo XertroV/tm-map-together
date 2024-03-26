@@ -15,3 +15,6 @@ float S_PlayerLabelHeight = 20.0;
 
 [Setting category="UI" name="Draw Own Labels?" description="it's for debug testing"]
 bool S_DrawOwnLabels = false;
+
+[Setting category="UI" name="Show Status Events on Screen" description="Show player joins/leaves, etc on screen"]
+bool S_StatusEventsOnScreen = true;

@@ -8,6 +8,12 @@ const uint8 MAP_BASE_NOSTADIUM  = 0b00100000;
 const uint8 MAP_BASE_STADIUM    = 0b01000000;
 const uint8 MAP_BASE_STADIUM155 = 0b10000000;
 
+enum ConnectionStage {
+    None, GettingAuthToken, ConnectingToServer, Joining, Creating, OpeningEditor, Done
+}
+
+ConnectionStage g_ConnectionStage = ConnectionStage::None;
+
 class MapTogetherConnection {
     protected Net::Socket@ socket;
     string op_token;
@@ -24,6 +30,8 @@ class MapTogetherConnection {
     uint8 baseCar;
     uint8 rulesFlags;
     uint itemMaxSize;
+    MapBase mapBaseName;
+    MapMood mapBaseMood;
 
     PlayerInRoom@[] playersInRoom;
     PlayerInRoom@[] playersEver;
@@ -34,12 +42,20 @@ class MapTogetherConnection {
     bool logAllUpdates = false;
     MTUpdateUndoable@[] updateLog;
 
+    uint totalBlocksPlaced;
+    uint totalBlocksRemoved;
+    uint totalItemsPlaced;
+    uint totalItemsRemoved;
+
+    StatusMsgUI@ statusMsgs = StatusMsgUI();
+
     // create a room
     MapTogetherConnection(const string &in password, bool expectEditorImmediately,
         uint roomMsBetweenActions = 0,
         nat3 _mapSize = nat3(80, 255, 80), uint8 _mapBase = 128, uint8 _baseCar = 0,
         uint8 _rulesFlags = 0, uint _itemMaxSize = 0
     ) {
+        g_ConnectionStage = ConnectionStage::None;
         server = m_CurrServer;
         remote_domain = ServerToEndpoint(m_CurrServer);
         log_info("Creating new room on server: " + remote_domain);
@@ -50,6 +66,7 @@ class MapTogetherConnection {
             log_warn("socket is null");
             return;
         }
+        g_ConnectionStage = ConnectionStage::Creating;
         // 1 = create
         log_trace('writing room request type');
         socket.Write(uint8(1));
@@ -77,6 +94,50 @@ class MapTogetherConnection {
         ExpectRoomDetails();
         log_info('Got room details');
 
+        if (socket is null) {
+            log_warn("socket is null");
+            return;
+        }
+
+        g_ConnectionStage = ConnectionStage::OpeningEditor;
+        this.expectEditorImmediately = expectEditorImmediately;
+        startnew(CoroutineFunc(this.Connected_WaitingForEditor));
+    }
+
+    // join a room
+    MapTogetherConnection(const string &in roomId, const string &in password = "") {
+        remote_domain = ServerToEndpoint(m_CurrServer);
+        log_info("Joining room on server: " + remote_domain);
+        IS_CONNECTING = true;
+        InitSock();
+        g_ConnectionStage = ConnectionStage::Joining;
+        if (socket is null) {
+            log_warn("socket is null");
+            return;
+        }
+        // 2 = join
+        log_trace('writing room request type');
+        socket.Write(uint8(2));
+        WriteLPString(socket, roomId);
+        roomPassword = password;
+        WriteLPString(socket, roomPassword);
+        ExpectOKResp();
+        log_info("Got okay response");
+        ExpectRoomDetails();
+        log_info("Got room details");
+
+        if (socket is null) {
+            log_warn("socket is null");
+            return;
+        }
+
+        g_ConnectionStage = ConnectionStage::OpeningEditor;
+        expectEditorImmediately = false;
+        startnew(CoroutineFunc(this.Connected_WaitingForEditor));
+    }
+
+    bool expectEditorImmediately;
+    void Connected_WaitingForEditor() {
         auto editor = cast<CGameCtnEditorFree>(GetApp().Editor);
         if (expectEditorImmediately) {
             if (editor is null) {
@@ -94,37 +155,7 @@ class MapTogetherConnection {
         startnew(Editor::EditorFeedGen_Loop);
         startnew(CoroutineFunc(this.ReadUpdatesLoop));
         IS_CONNECTING = false;
-    }
-
-    // join a room
-    MapTogetherConnection(const string &in roomId, const string &in password = "") {
-        remote_domain = ServerToEndpoint(m_CurrServer);
-        log_info("Joining room on server: " + remote_domain);
-        IS_CONNECTING = true;
-        InitSock();
-        if (socket is null) {
-            log_warn("socket is null");
-            return;
-        }
-        // 2 = join
-        log_trace('writing room request type');
-        socket.Write(uint8(2));
-        WriteLPString(socket, roomId);
-        roomPassword = password;
-        WriteLPString(socket, roomPassword);
-        ExpectOKResp();
-        log_info("Got okay response");
-        ExpectRoomDetails();
-        log_info("Got room details");
-
-        auto editor = cast<CGameCtnEditorFree>(GetApp().Editor);
-        if (editor is null) NotifyWarning("Waiting to enter editor...");
-        while ((@editor = cast<CGameCtnEditorFree>(GetApp().Editor)) is null) yield();
-        while (!editor.PluginMapType.IsEditorReadyForRequest) yield();
-
-        startnew(Editor::EditorFeedGen_Loop);
-        startnew(CoroutineFunc(this.ReadUpdatesLoop));
-        IS_CONNECTING = false;
+        g_ConnectionStage = ConnectionStage::Done;
     }
 
     bool get_IsConnected() {
@@ -175,6 +206,8 @@ class MapTogetherConnection {
         log_info("Read map size: " + mapSize.ToString());
         mapBase = socket.ReadUint8();
         log_info("Read map base: " + mapBase);
+        mapBaseName = EncodedMapBaseToName(mapBase);
+        mapBaseMood = EncodedMapBaseToMood(mapBase);
         baseCar = socket.ReadUint8();
         log_info("Read base car: " + baseCar);
         rulesFlags = socket.ReadUint8();
@@ -200,7 +233,9 @@ class MapTogetherConnection {
     }
 
     protected void InitSock() {
+        g_ConnectionStage = ConnectionStage::GettingAuthToken;
         string op_token = GetAuthToken();
+        g_ConnectionStage = ConnectionStage::ConnectingToServer;
         // log_trace('token: ' + op_token);
         @this.socket = Net::Socket();
         uint startTime = Time::Now;
@@ -411,6 +446,17 @@ class MapTogetherConnection {
 
     void RecordUserStats(MTUpdate@ update) {
         if (update is null) return;
+
+        auto place = cast<MTPlaceUpdate>(update);
+        auto del = cast<MTDeleteUpdate>(update);
+        if (place !is null) {
+            totalBlocksPlaced += place.mb.blocks.Length;
+            totalItemsPlaced += place.mb.items.Length;
+        } else if (del !is null) {
+            totalBlocksRemoved += del.mb.blocks.Length;
+            totalItemsRemoved += del.mb.items.Length;
+        }
+
         auto p = FindPlayerInRoom(update.meta.playerId);
         if (p is null) {
             @p = FindPlayerEver(update.meta.playerId);
@@ -490,6 +536,7 @@ class MapTogetherConnection {
             playersInRoom.InsertLast(player);
             names[player.id] = player.name;
             AddAdmin(player);
+            statusMsgs.AddGameEvent(MTEventPlayerAdminJoined(player.name));
             return;
         }
         auto p = FindPlayerInRoom(player.id);
@@ -504,7 +551,9 @@ class MapTogetherConnection {
             names[player.id] = player.name;
         } else {
             playersInRoom.InsertLast(p);
+            p.isInRoom = true;
         }
+        statusMsgs.AddGameEvent(MTEventPlayerJoined(player.name));
     }
 
     bool HasLocalAdmin() {
@@ -554,6 +603,8 @@ class MapTogetherConnection {
     void RemovePlayer(const string &in playerId) {
         for (uint i = 0; i < playersInRoom.Length; i++) {
             if (playersInRoom[i].id == playerId) {
+                statusMsgs.AddGameEvent(MTEventPlayerLeft(playersInRoom[i].name));
+                playersInRoom[i].isInRoom = false;
                 playersInRoom.RemoveAt(i);
             }
         }
@@ -688,6 +739,8 @@ enum MTUpdateTy {
     PlayerCamCursor = 14,
     VehiclePos = 15,
     Admin_SetActionLimit = 16,
+    // put new commands above this
+    XXX_LAST
 }
 
 
@@ -891,6 +944,7 @@ class PlayerInRoom {
     bool isMod;
     bool isAdmin;
     bool isLocal;
+    bool isInRoom;
     uint[] actionCounts;
     uint blocksPlaced = 0;
     uint blocksRemoved = 0;
@@ -909,16 +963,20 @@ class PlayerInRoom {
         this.joinTime = joinTime;
         this.isMod = false;
         this.isAdmin = false;
+        isInRoom = true;
         isLocal = name == GetApp().LocalPlayerInfo.Name;
         // need at least 16
-        actionCounts = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+        actionCounts = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
     }
 
     void UpdateStats(MTUpdate@ update) {
         if (update is null) return;
-        if (uint(update.ty) >= actionCounts.Length) {
-            NotifyWarning("Invalid action type: " + uint(update.ty));
+        if (uint(update.ty) > 255) {
+            NotifyWarning("Bad action type: " + uint(update.ty));
             return;
+        }
+        while (uint(update.ty) >= actionCounts.Length) {
+            actionCounts.InsertLast(0);
         }
         actionCounts[uint(update.ty)]++;
         if (update.ty == MTUpdateTy::Place) {
@@ -965,7 +1023,9 @@ class PlayerInRoom {
         UI::Text("Items Placed");
         UI::Text("Items Removed");
         UI::Text("Skins Changed");
-        for (uint i = 0; i < actionCounts.Length; i++) {
+
+        auto nbToDraw = Math::Min(actionCounts.Length, uint(MTUpdateTy::XXX_LAST));
+        for (int i = 0; i < nbToDraw; i++) {
             UI::Text(tostring(MTUpdateTy(i)));
         }
         UI::NextColumn();
@@ -974,7 +1034,8 @@ class PlayerInRoom {
         UI::Text(tostring(itemsPlaced));
         UI::Text(tostring(itemsRemoved));
         UI::Text(tostring(skinsChanged));
-        for (uint i = 0; i < actionCounts.Length; i++) {
+
+        for (int i = 0; i < nbToDraw; i++) {
             UI::Text(tostring(actionCounts[i]));
         }
         UI::Columns(1);

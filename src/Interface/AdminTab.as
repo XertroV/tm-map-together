@@ -66,7 +66,7 @@ void DrawAdminTabSettings() {
     UI::Text("currActionLimitHzLog: " + currActionLimitHzLog);
     float newActionLimitLogHz = UI::SliderFloat("Room Action Limit", currActionLimitHzLog, -2.0, 4.2, label, UI::SliderFlags::None);
     float newActionLimitHz = Math::Pow(10, newActionLimitLogHz);
-    uint newLimitNumber = Math::Round(HzToActionLimit(newActionLimitHz));
+    uint newLimitNumber = uint(Math::Round(HzToActionLimit(newActionLimitHz)));
     UI::Text("newActionLimitLogHz: " + newActionLimitLogHz);
     UI::Text("newActionLimitHz: " + newActionLimitHz);
     UI::Text("newLimitNumber: " + newLimitNumber);

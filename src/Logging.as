@@ -50,7 +50,7 @@ void log_trace(const string &in msg, bool passthrough = false) {
 int PausedLogsLen = -1;
 
 void DrawLogsTab() {
-    auto nbLogs = logs.Length;
+    int nbLogs = logs.Length;
     if (PausedLogsLen > nbLogs) PausedLogsLen = -1;
     UI::AlignTextToFramePadding();
     UI::Text("Logs: " + nbLogs);
