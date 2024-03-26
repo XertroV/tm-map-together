@@ -298,7 +298,11 @@ namespace Editor {
     VehiclePos@ lastVehiclePos = VehiclePos();
     uint lastUpdateVehicleCheck = 0;
     uint lastUpdateCursorCheck = 0;
-    uint updateEveryMs = 100;
+    uint updateEveryMs {
+        get {
+            return Math::Max(S_UpdateMS_Clamped, 100);
+        }
+    }
 
     void CheckUpdateVehicle(CSmArenaClient@ pg) {
         if (lastUpdateVehicleCheck + updateEveryMs > Time::Now) return;

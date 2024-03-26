@@ -21,3 +21,11 @@ bool S_StatusEventsOnScreen = true;
 
 [Setting category="UI" name="Player tags as camera target only" description="Other players' cursors will just show their camera target pos, not their cursor position."]
 bool S_PlayerTagsAsCameraTargetOnly = false;
+
+[Setting hidden]
+uint S_UpdateMS_Clamped = 100;
+
+[SettingsTab name="Other"]
+void RenderST_Other() {
+    S_UpdateMS_Clamped = Math::Clamp(UI::InputInt("Cursor/V Update Frequence (ms)", S_UpdateMS_Clamped), 100, 100000);
+}
