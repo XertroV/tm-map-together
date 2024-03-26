@@ -35,7 +35,7 @@ class MTGameEvent {
         nvg::FillColor(bgCol * vec4(1, 1, 1, alpha));
         auto textBounds = nvg::TextBounds(msg);
         auto pad = vec2(3.);
-        nvg::Rect(pos - pad - vec2(0, 2), textBounds + pad * 2.);
+        nvg::Rect(pos - pad, textBounds + pad * 2.);
         nvg::Fill();
         nvg::FillColor(col * vec4(1, 1, 1, alpha));
         nvg::Text(pos, msg);
@@ -115,7 +115,7 @@ class StatusMsgUI {
         vec2 pos = GameEventsTopLeft;
         // draw maps along top
         // draw game events
-        float yDelta = BaseFontHeight + EventLogSpacing;
+        float yDelta = BaseFontHeight + EventLogSpacing + 2.0;
         for (int i = 0; i < int(state.activeEvents.Length); i++) {
             if (state.activeEvents[i].RenderUpdate(dt, pos)) {
                 state.activeEvents.RemoveAt(i);

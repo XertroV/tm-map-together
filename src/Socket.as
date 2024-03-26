@@ -535,8 +535,8 @@ class MapTogetherConnection {
             playersEver.InsertLast(player);
             playersInRoom.InsertLast(player);
             names[player.id] = player.name;
-            // AddAdmin(player);
-            // statusMsgs.AddGameEvent(MTEventPlayerAdminJoined(player.name));
+            AddAdmin(player);
+            statusMsgs.AddGameEvent(MTEventPlayerAdminJoined(player.name));
             return;
         }
         auto p = FindPlayerInRoom(player.id);
