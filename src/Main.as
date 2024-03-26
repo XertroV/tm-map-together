@@ -45,7 +45,7 @@ void Main() {
     m_Size.z = m_SizeZ;
 }
 
-[Setting hidden]
+[Setting category="normally hidden" name="window open"]
 bool g_WindowOpen = true;
 
 const string PLUGIN_ICON = "\\$d9F" + Icons::MapO + Icons::Times + Icons::Users;
@@ -277,10 +277,10 @@ string ServerToEndpoint(MTServers server) {
     return "";
 }
 
-[Setting hidden]
+[Setting category="normally hidden" name="preferred server"]
 MTServers m_CurrServer = MTServers::De;
 
-[Setting hidden]
+[Setting category="normally hidden" name="last room id"]
 string m_RoomId;
 
 void DrawMainUI_Inner() {

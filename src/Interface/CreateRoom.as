@@ -25,20 +25,20 @@ bool m_AllowCustomItems = false;
 bool m_AllowSweeps = false;
 // ignore for the moment
 bool m_AllowSelectionCut = false;
-[Setting hidden]
+[Setting category="normally hidden" name="saved mood"]
 MapMood m_Mood = MapMood::Day;
-[Setting hidden]
+[Setting category="normally hidden" name="saved base"]
 MapBase m_Base = MapBase::Stadium155;
-[Setting hidden]
+[Setting category="normally hidden" name="saved car"]
 MapCar m_Car = MapCar::CarSport;
 
 nat3 m_Size = nat3(48, 255, 48);
 
-[Setting hidden]
+[Setting category="normally hidden" name="saved map SizeX"]
 uint m_SizeX = 48;
-[Setting hidden]
+[Setting category="normally hidden" name="saved map SizeY"]
 uint m_SizeY = 255;
-[Setting hidden]
+[Setting category="normally hidden" name="saved map SizeZ"]
 uint m_SizeZ = 48;
 
 
@@ -66,10 +66,10 @@ void DrawCreateRoomForm_InviteToRoom() {
     }
     m_Mood = MapDecoToMood(editor.Challenge.Decoration);
     m_Base = MapDecoToBase(editor.Challenge.Decoration);
-    if (m_Base != MapBase::Stadium155) {
-        UI::Text("\\$f84Error: only Stadium 155 is supported for now. Mappers will load Stadium 155 unless joining from an existing map.");
-        m_Base = MapBase::Stadium155;
-    }
+    // if (m_Base != MapBase::Stadium155) {
+    //     UI::Text("\\$f84Error: only Stadium 155 is supported for now. Mappers will load Stadium 155 unless joining from an existing map.");
+    //     m_Base = MapBase::Stadium155;
+    // }
     m_Car = MapToCar(editor.Challenge);
     DrawCreateRoomForm_BottomPart_Immutable(m_Mood, m_Base, m_Car, editor.Challenge.Size);
     // no patch for when you're already in the editor

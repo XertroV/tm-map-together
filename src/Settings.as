@@ -1,13 +1,13 @@
 [Setting category="UI" name="Use a colorful plugin name." description="Affects menu and window title"]
 bool S_NiceName = true;
 
-[Setting hidden]
+[Setting category="normally hidden" name="render player tags"]
 bool S_RenderPlayersNvg = true;
 
-[Setting hidden]
+[Setting category="normally hidden" name="show status hud (pending actions)"]
 bool S_RenderStatusHUD = true;
 
-[Setting hidden]
+[Setting category="normally hidden" name="enable trivial placement optimizations" description="skip some undo-place or undo-delete operations when nothing has happened in the mean time."]
 bool S_EnablePlacementOptmization_Skip1TrivialMine = true;
 
 [Setting category="UI" name="Player Label Size" min=6 max=80 drag]
