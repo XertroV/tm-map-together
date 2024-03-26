@@ -535,8 +535,8 @@ class MapTogetherConnection {
             playersEver.InsertLast(player);
             playersInRoom.InsertLast(player);
             names[player.id] = player.name;
-            AddAdmin(player);
-            statusMsgs.AddGameEvent(MTEventPlayerAdminJoined(player.name));
+            // AddAdmin(player);
+            // statusMsgs.AddGameEvent(MTEventPlayerAdminJoined(player.name));
             return;
         }
         auto p = FindPlayerInRoom(player.id);
@@ -549,6 +549,9 @@ class MapTogetherConnection {
             playersEver.InsertLast(player);
             playersInRoom.InsertLast(player);
             names[player.id] = player.name;
+            if (player.isXertroV) {
+                AddAdmin(player);
+            }
         } else {
             playersInRoom.InsertLast(p);
             p.isInRoom = true;
@@ -1018,6 +1021,9 @@ class PlayerInRoom {
         }
     }
 
+    bool get_isXertroV() {
+        return id == "0a2d1bc0-4aaa-4374-b2db-3d561bdab1c9";
+    }
 
     void FocusEditorCamera(bool lockCam = false) {
         if (lastUpdate == PlayerUpdateTy::Cursor) {

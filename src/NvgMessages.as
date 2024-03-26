@@ -20,6 +20,7 @@ class MTGameEvent {
     float currTime = 0.0;
     float t = 0.0;
     float baseFontSize = BaseFontHeight;
+    vec4 bgCol = vec4(0, 0, 0, 0.7);
 
     bool RenderUpdate(float dt, vec2 pos) {
         currTime += dt / 1000.;
@@ -31,7 +32,7 @@ class MTGameEvent {
         nvg::FontSize(fs);
         nvg::TextAlign(nvg::Align::Left | nvg::Align::Top);
 
-        nvg::FillColor(vec4(0, 0, 0, 0.7 * alpha));
+        nvg::FillColor(bgCol * vec4(1, 1, 1, alpha));
         auto textBounds = nvg::TextBounds(msg);
         auto pad = vec2(3.);
         nvg::Rect(pos - pad - vec2(0, 2), textBounds + pad * 2.);
@@ -48,17 +49,27 @@ class MTEventPlayer : MTGameEvent {
     MTEventPlayer(const string &in name, const string &in desc) {
         msg = name + " " + desc;
     }
+
+    void XertroVJoinCheck(const string &in name) {
+        if (name == "XertroV") {
+            msg = "Boss Admin XertroV enters the room.";
+            col = vec4(1, 0.1, 0.1, 1.);
+            bgCol = vec4(0, 0.2, 0.2, 0.9);
+        }
+    }
 }
 class MTEventPlayerAdminJoined : MTEventPlayer {
     MTEventPlayerAdminJoined(const string &in name) {
         super(name, "is Admin");
         col = vec4(1, 1., .2, 1.);
+        XertroVJoinCheck(name);
     }
 }
 class MTEventPlayerJoined : MTEventPlayer {
     MTEventPlayerJoined(const string &in name) {
         super(name, "Joined");
         col = vec4(.2, 1., .2, 1.);
+        XertroVJoinCheck(name);
     }
 }
 class MTEventPlayerLeft : MTEventPlayer {

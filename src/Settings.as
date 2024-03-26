@@ -18,3 +18,6 @@ bool S_DrawOwnLabels = false;
 
 [Setting category="UI" name="Show Status Events on Screen" description="Show player joins/leaves, etc on screen"]
 bool S_StatusEventsOnScreen = true;
+
+[Setting category="UI" name="Player tags as camera target only" description="Other players' cursors will just show their camera target pos, not their cursor position."]
+bool S_PlayerTagsAsCameraTargetOnly = false;
