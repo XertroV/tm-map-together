@@ -252,31 +252,31 @@ void DrawCreateRoomForm_BottomPart_Mutable() {
     UI::SameLine();
     if (UI::Button("48²")) {
         m_Size.x = 48;
-        m_Size.y = 255;
+        // m_Size.y = 255;
         m_Size.z = 48;
     }
     UI::SameLine();
     if (UI::Button("64²")) {
         m_Size.x = 64;
-        m_Size.y = 255;
+        // m_Size.y = 255;
         m_Size.z = 64;
     }
     UI::SameLine();
     if (UI::Button("80²")) {
         m_Size.x = 80;
-        m_Size.y = 255;
+        // m_Size.y = 255;
         m_Size.z = 80;
     }
     UI::SameLine();
     if (UI::Button("128²")) {
         m_Size.x = 128;
-        m_Size.y = 255;
+        // m_Size.y = 255;
         m_Size.z = 128;
     }
     UI::SameLine();
     if (UI::Button("255²")) {
         m_Size.x = 255;
-        m_Size.y = 255;
+        // m_Size.y = 255;
         m_Size.z = 255;
     }
     UI::PopItemWidth();
