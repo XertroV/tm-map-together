@@ -8,12 +8,20 @@ class PlayerCamCursor : MTUpdate, HasPlayerLabelDraw {
     vec3 pos;
 
     PlayerCamCursor() {
+        super();
         ty = MTUpdateTy::PlayerCamCursor;
+        MTUpdateCount_PlayerCamCursor_Created++;
     }
 
     PlayerCamCursor(MemoryBuffer@ buf) {
+        super();
         ty = MTUpdateTy::PlayerCamCursor;
+        MTUpdateCount_PlayerCamCursor_Created++;
         ReadFromBuf(buf);
+    }
+
+    ~PlayerCamCursor() {
+        MTUpdateCount_PlayerCamCursor_Destroyed++;
     }
 
     PlayerCamCursor@ ReadFromBuf(MemoryBuffer@ buf) {
@@ -65,7 +73,7 @@ class PlayerCamCursor : MTUpdate, HasPlayerLabelDraw {
         auto _place_mode = uint8(Editor::GetPlacementMode(editor));
         auto _coord = cursor.Coord;
         vec3 _pos;
-        if (_place_mode == CGameEditorPluginMap::EPlaceMode::Item) {
+        if (_place_mode == CGameEditorPluginMap::EPlaceMode::Item || _place_mode == CGameEditorPluginMap::EPlaceMode::Test) {
             _pos = itemCursor.CurrentPos;
         } else {
             _pos = cursor.FreePosInMap;
@@ -127,6 +135,7 @@ class PlayerCamCursor : MTUpdate, HasPlayerLabelDraw {
         bool isFreeLook = this.edit_mode == EditMode::FreeLook;
         bool isSelecting = this.edit_mode == EditMode::SelectionAdd || this.edit_mode == EditMode::SelectionRemove;
         bool isSkinning = this.edit_mode == EditMode::Place && this.place_mode == PlaceMode::Skin;
+        bool isTesting = this.edit_mode == EditMode::Place && this.place_mode == PlaceMode::Test;
 
         // isPlacingCoord = isPlacingCoord;
         bool isPlacingFree = this.place_mode == PlaceMode::FreeBlock || this.place_mode == PlaceMode::FreeMacroblock || this.place_mode == PlaceMode::Item;
@@ -137,19 +146,21 @@ class PlayerCamCursor : MTUpdate, HasPlayerLabelDraw {
         if (!S_PlayerTagsAsCameraTargetOnly && (isPlacing || shouldUseCoord)) {
             if (isPlacingCoord || shouldUseCoord) {
                 drawAtWorldPos = CoordToPos(this.coord) + vec3(16, 4, 16);
-            } else if (isPlacingFree) {
+            } else if (isPlacingFree || isTesting) {
                 drawAtWorldPos = this.pos;
             }
         }
+        if (lastDrawWorldPos.LengthSquared() > 1.0) {
+            drawAtWorldPos = Math::Lerp(lastDrawWorldPos, drawAtWorldPos, 1. - Math::Exp(animLambda * lastDt * 0.001));
+        }
         screenTextPos = Camera::ToScreen(drawAtWorldPos);
         bool drawCamAndTarget = screenTextPos.z < 0.0;
-        if (lastScreenTextPos.LengthSquared() > 1.0) {
-            screenTextPos = Math::Lerp(lastScreenTextPos, screenTextPos, 1. - Math::Exp(animLambda * lastDt * 0.001));
-        }
-        lastScreenTextPos = screenTextPos;
+        lastDrawWorldPos = drawAtWorldPos;
         vec4 bgCol = cBlack;
         if (isPicking) {
             bgCol = cDarkGreen * vec4(1, 1, 1, .9);
+        } else if (isTesting) {
+            bgCol = cMagenta * vec4(.5, .5, .5, .9);
         } else if (isFreeLook) {
             // nothing
         } else if (isSkinning) {
@@ -166,7 +177,7 @@ class PlayerCamCursor : MTUpdate, HasPlayerLabelDraw {
 
         // if ()
         if (drawCamAndTarget) {
-            DrawPlayerLabel(name, lastScreenTextPos.xy, cWhite, bgCol);
+            DrawPlayerLabel(name, screenTextPos.xy, cWhite, bgCol);
         }
     }
 }
@@ -174,12 +185,14 @@ class PlayerCamCursor : MTUpdate, HasPlayerLabelDraw {
 mixin class HasPlayerLabelDraw {
     vec2 textBounds;
     vec3 screenTextPos;
+    vec3 lastDrawWorldPos;
     vec3 lastScreenTextPos;
     vec3 drawAtWorldPos;
     // more negative = faster movement
-    float animLambda = -10.0;
+    float animLambda = -8.0;
 
     void DrawPlayerLabel(const string &in name, vec2 textPos, const vec4 &in fg, const vec4 &in bg) {
+        // todo: fade based on distance vs camera target distance
         auto labelPos = textPos;
         textPos += vec2(playerLabelBaseHeight * .8, 0);
         nvg::FontSize(playerLabelBaseHeight);
@@ -232,18 +245,30 @@ enum PlaceMode {
     FreeMacroblock,
 }
 
+enum ItemMode {
+    Normal, Ghost, Free
+}
+
 
 class VehiclePos : MTUpdate, HasPlayerLabelDraw {
     iso4 mat;
     vec3 vel;
 
     VehiclePos() {
+        super();
         ty = MTUpdateTy::VehiclePos;
+        MTUpdateCount_VehiclePos_Created++;
     }
 
     VehiclePos(MemoryBuffer@ buf) {
+        super();
         ty = MTUpdateTy::VehiclePos;
+        MTUpdateCount_VehiclePos_Created++;
         ReadFromBuf(buf);
+    }
+
+    ~VehiclePos() {
+        MTUpdateCount_VehiclePos_Destroyed++;
     }
 
     VehiclePos@ ReadFromBuf(MemoryBuffer@ buf) {
@@ -294,22 +319,75 @@ class VehiclePos : MTUpdate, HasPlayerLabelDraw {
     }
 }
 
+uint64 g_tmpPtrReadBuf_128 = 0;
+uint64 GetTmpPtrReadBuf_128() {
+    if (g_tmpPtrReadBuf_128 == 0) {
+        g_tmpPtrReadBuf_128 = Dev::Allocate(128);
+    }
+    if (g_tmpPtrReadBuf_128 == 0) throw("Failed to allocate for g_tmpPtrReadBuf_128");
+    return g_tmpPtrReadBuf_128;
+}
 
 iso4 ReadIso4FromBuf(MemoryBuffer@ buf) {
-    auto ptr = Dev::Allocate(64);
+    auto ptr = GetTmpPtrReadBuf_128();
     for (int i = 0; i < 12; i++) {
         Dev::Write(ptr + i * 4, buf.ReadFloat());
     }
-    auto ret = Dev::ReadIso4(ptr);
-    Dev::Free(ptr);
-    return ret;
+    return Dev::ReadIso4(ptr);
 }
 
 void WriteIso4ToBuf(MemoryBuffer@ buf, iso4 mat) {
-    auto ptr = Dev::Allocate(64);
+    auto ptr = GetTmpPtrReadBuf_128();
     Dev::Write(ptr, mat);
     for (int i = 0; i < 12; i++) {
         buf.Write(Dev::ReadFloat(ptr + i * 4));
     }
-    Dev::Free(ptr);
+}
+
+
+
+
+
+class ChatUpdate : MTUpdate {
+    string msg;
+    uint idValue;
+    uint8 type;
+
+    ChatUpdate() {
+        super();
+        ty = MTUpdateTy::ChatMsg;
+        MTUpdateCount_ChatUpdate_Created++;
+    }
+
+    ChatUpdate(MemoryBuffer@ buf) {
+        super();
+        ty = MTUpdateTy::ChatMsg;
+        MTUpdateCount_ChatUpdate_Created++;
+        ReadFromBuf(buf);
+    }
+
+    ~ChatUpdate() {
+        MTUpdateCount_ChatUpdate_Destroyed++;
+    }
+
+    ChatUpdate@ ReadFromBuf(MemoryBuffer@ buf) {
+        type = buf.ReadUInt8();
+        msg = ReadLPStringFromBuffer(buf);
+        return this;
+    }
+
+    void WriteToNetworkBuffer(MemoryBuffer@ buf) const {
+        buf.Write(type);
+        WriteLPStringToBuffer(buf, msg);
+    }
+
+    bool Apply(CGameCtnEditorFree@ editor) override {
+        if (g_MTConn is null) return false;
+        auto p = g_MTConn.FindPlayerEver(meta.playerMwId.Value);
+        if (p is null) {
+            log_warn("ChatUpdate::Apply: Failed to find player for ID/WSID/Name: " + meta.playerMwId.Value + " / " + meta.playerId + " / " + meta.playerName);
+        }
+        g_MTConn.serverChat.AddMessage(ChatMessage(p, type, msg));
+        return false;
+    }
 }

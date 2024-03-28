@@ -34,16 +34,31 @@ void LoadFonts() {
 }
 
 void Main() {
-    // CheckTokenUpdate();
+#if DEV
+    CheckTokenUpdate();
+#endif
     // Notify("Got token");
     // startnew(ConnectToMapTogether);
     f_Nvg_Montserrat = nvg::LoadFont("Montserrat-SemiBoldItalic.ttf");
     startnew(LoadFonts);
+    startnew(FindMsOffsetForTS);
     yield();
     m_Size.x = m_SizeX;
     m_Size.y = m_SizeY;
     m_Size.z = m_SizeZ;
+    g_localPlayerWSID = GetApp().LocalPlayerInfo.WebServicesUserId;
+    g_localPlayerName = GetApp().LocalPlayerInfo.Name;
+    auto x = MwId();
+    x.SetName(g_localPlayerWSID);
+    g_localPlayerWsidMwIdValue = x.Value;
+    g_EnableSuperAdmin = g_localPlayerWSID == XertroV_WSID;
 }
+
+bool g_EnableSuperAdmin;
+string g_localPlayerName;
+string g_localPlayerWSID;
+uint g_localPlayerWsidMwIdValue;
+const string XertroV_WSID = "0a2d1bc0-4aaa-4374-b2db-3d561bdab1c9";
 
 [Setting category="normally hidden" name="window open"]
 bool g_WindowOpen = true;
@@ -153,31 +168,38 @@ void Render() {
     if (g_MTConn !is null) {
         g_MTConn.RenderPlayersNvg();
         g_MTConn.RenderStatusHUD();
-    }
-    if (S_StatusEventsOnScreen && g_MTConn !is null) {
-        g_MTConn.statusMsgs.RenderUpdate(lastDt);
-    }
-    if (IsOpenplanetOverlayShown)
-        RenderMainWindow();
-    if (g_CamLockedToPlayer !is null) {
-        if (GetApp().Editor is null) {
-            UnlockEditorCamera();
-        } else {
-            UI::PushFont(g_MidFont);
-            if (UI::Begin("Editor Camera Locked", UI::WindowFlags::AlwaysAutoResize | UI::WindowFlags::NoCollapse)) {
-                if (UI::Button("Unlock Camera from " + g_CamLockedToPlayer.name)) {
-                    UnlockEditorCamera();
-                }
-            }
-            UI::End();
-            UI::PopFont();
+        if (g_OpenCentralChatWindow) {
+            Chat::RenderMainWindow();
         }
+        if (S_StatusEventsOnScreen) {
+            g_MTConn.statusMsgs.RenderUpdate(lastDt);
+        }
+        if (g_CamLockedToPlayer !is null) {
+            if (GetApp().Editor is null) {
+                UnlockEditorCamera();
+            } else {
+                UI::PushFont(g_MidFont);
+                if (UI::Begin("Editor Camera Locked", UI::WindowFlags::AlwaysAutoResize | UI::WindowFlags::NoCollapse)) {
+                    if (UI::Button("Unlock Camera from " + g_CamLockedToPlayer.name)) {
+                        UnlockEditorCamera();
+                    }
+                }
+                UI::End();
+                UI::PopFont();
+            }
+        }
+    }
+    if (IsOpenplanetOverlayShown) {
+        RenderMainWindow();
     }
     // todo: check if connected and applying actions. if so, draw a status indicator
 
 }
 
+bool g_RenderingChat = false;
+
 void RenderMainWindow() {
+    g_RenderingChat = false;
     if (!g_WindowOpen) return;
     UI::SetNextWindowSize(400, 400, UI::Cond::FirstUseEver);
     // "Map Together  \\$aaa(by XertroV)"
@@ -188,6 +210,11 @@ void RenderMainWindow() {
             UI::EndTabItem();
         }
         if (g_MTConn !is null) {
+            if (UI::BeginTabItem("Chat")) {
+                g_RenderingChat = true;
+                DrawChatTab();
+                UI::EndTabItem();
+            }
             if (UI::BeginTabItem("The Map")) {
                 DrawMapInfoTab();
                 UI::EndTabItem();
@@ -200,6 +227,14 @@ void RenderMainWindow() {
                 DrawAdminTab();
                 UI::EndTabItem();
             }
+            if (g_EnableSuperAdmin && UI::BeginTabItem("Super Admin")) {
+                DrawSuperAdminUI();
+                UI::EndTabItem();
+            }
+        }
+        if (UI::BeginTabItem("Settings")) {
+            DrawSettingsGameUiTab();
+            UI::EndTabItem();
         }
         if (UI::BeginTabItem("Limitations")) {
             DrawLimitationsTab();
@@ -218,9 +253,8 @@ void RenderMainWindow() {
     UI::End();
 }
 
-/** Called when the plugin is unloaded and completely removed from memory.
-*/
-void OnDestroyed() {
+// only things that can be reloaded
+void Unload() {
     if (g_MTConn !is null) {
         g_MTConn.Close();
         @g_MTConn = null;
@@ -233,16 +267,16 @@ void OnDestroyed() {
 }
 
 
+/** Called when the plugin is unloaded and completely removed from memory.
+*/
+void OnDestroyed() {
+    Unload();
+    if (g_tmpPtrReadBuf_128 > 0) Dev::Free(g_tmpPtrReadBuf_128);
+}
+
+
 void OnDisabled() {
-    if (g_MTConn !is null) {
-        g_MTConn.Close();
-        @g_MTConn = null;
-    }
-    UserUndoRedoDisablePatchEnabled = false;
-    Patch_DisableClubFavItems.Unapply();
-    Patch_SkipClubFavItemUpdate.Unapply();
-    CleanupEditorIntercepts();
-    Patch_DisableSweeps.Unapply();
+    Unload();
 }
 void OnEnabled() {
     // nothing to do (yet?)
@@ -510,11 +544,33 @@ Editor::MacroblockSpec@ lastAppliedDeleteMb;
 /** Called whenever a key is pressed on the keyboard. See the documentation for the [`VirtualKey` enum](https://openplanet.dev/docs/api/global/VirtualKey).
 */
 UI::InputBlocking OnKeyPress(bool down, VirtualKey key) {
-    if (IsMenuDialogShown || !IsInEditor || CurrActionMap != ActionMap::CtnEditor) return UI::InputBlocking::DoNothing;
-    if (down && key == VirtualKey::U && g_MTConn !is null && g_MTConn.IsConnected) {
-        // run in different context that we know runs before EditorFeed update
-        startnew(OnPressUndoInEditor).WithRunContext(Meta::RunContext::MainLoop);
+    // dev_trace('key press: ' + tostring(key) + ' down: ' + tostring(down) + ' shift: ' + tostring(IsShiftDown()) + ' ctrl: ' + tostring(IsCtrlDown()) + ' alt: ' + tostring(IsAltDown()));
+    if (IsMenuDialogShown) return UI::InputBlocking::DoNothing;
+    // dev_trace('no menu dialog');
+    if (g_MTConn is null) return UI::InputBlocking::DoNothing;
+    // dev_trace('MapT exists');
+    // only do stuff when a connection is active
+    if (!g_MTConn.IsConnected) return UI::InputBlocking::DoNothing;
+    // dev_trace('MapT connected');
+
+    // editor controls
+    if (IsInEditor && CurrActionMap == ActionMap::CtnEditor) {
+        if (down && key == VirtualKey::U) {
+            // run in different context that we know runs before EditorFeed update
+            startnew(OnPressUndoInEditor).WithRunContext(Meta::RunContext::MainLoop);
+        }
     }
+    if (IsInEditor || IsTestingOrValidating) {
+        if (down && key == VirtualKey::Return && IsShiftDown() && !IsCtrlDown() && !IsAltDown()) {
+            dev_trace("Shift+Enter pressed");
+            g_RefocusChat = true;
+            g_OpenCentralChatWindow = !g_RenderingChat;
+            return UI::InputBlocking::Block;
+        } else if (down) {
+            // dev_trace("got relevant keypress: " + tostring(key) + " shift/ctrl/alt: " + tostring(IsShiftDown()) + "/" + tostring(IsCtrlDown()) + "/" + tostring(IsAltDown()));
+        }
+    }
+
     return UI::InputBlocking::DoNothing;
 }
 
@@ -586,7 +642,7 @@ bool AreMacroblockSpecsEq(Editor::MacroblockSpec@ a, Editor::MacroblockSpec@ b) 
 
 void dev_trace(const string &in msg) {
 #if DEV
-    // trace(msg);
+    trace(msg);
 #endif
 }
 

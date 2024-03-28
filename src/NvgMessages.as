@@ -22,6 +22,14 @@ class MTGameEvent {
     float baseFontSize = BaseFontHeight;
     vec4 bgCol = vec4(0, 0, 0, 0.7);
 
+    MTGameEvent() {
+        startnew(CoroutineFunc(this.LogMsg));
+    }
+
+    void LogMsg() {
+        log_debug("Status Msg: " + msg);
+    }
+
     bool RenderUpdate(float dt, vec2 pos) {
         currTime += dt / 1000.;
         t = currTime / animDuration;
@@ -46,45 +54,60 @@ class MTGameEvent {
 
 
 class MTEventPlayer : MTGameEvent {
-    MTEventPlayer(const string &in name, const string &in desc) {
-        msg = name + " " + desc;
+    MTEventPlayer(PlayerInRoom@ player, const string &in desc) {
+        msg = player.nameAndTitle + " " + desc;
     }
 
-    void XertroVJoinCheck(const string &in name) {
-        if (name == "XertroV") {
-            msg = "Boss Admin XertroV enters the room.";
+    void XertroVJoinCheck(PlayerInRoom@ player) {
+        if (player.name == "XertroV") {
+            msg = "Boss Admin XertroV entered the room.";
             col = vec4(1, 0.1, 0.1, 1.);
             bgCol = vec4(0, 0.2, 0.2, 0.9);
         }
     }
 }
 class MTEventPlayerAdminJoined : MTEventPlayer {
-    MTEventPlayerAdminJoined(const string &in name) {
-        super(name, "is Admin");
+    MTEventPlayerAdminJoined(PlayerInRoom@ player) {
+        super(player, "is Admin");
         col = vec4(1, 1., .2, 1.);
-        XertroVJoinCheck(name);
+        XertroVJoinCheck(player);
     }
 }
 class MTEventPlayerJoined : MTEventPlayer {
-    MTEventPlayerJoined(const string &in name) {
-        super(name, "Joined");
+    MTEventPlayerJoined(PlayerInRoom@ player) {
+        super(player, "Joined");
         col = vec4(.2, 1., .2, 1.);
-        XertroVJoinCheck(name);
+        XertroVJoinCheck(player);
     }
 }
 class MTEventPlayerLeft : MTEventPlayer {
-    MTEventPlayerLeft(const string &in name) {
-        super(name, "Left");
+    MTEventPlayerLeft(PlayerInRoom@ player) {
+        super(player, "Left");
         col = vec4(1., .4, 0, 1.);
     }
 }
 class MTEventAdminSetActionLimit : MTGameEvent {
-    MTEventAdminSetActionLimit(const string &in name, uint limit) {
-        msg = name + " set action limit to " + ActionLimitToHz(limit) + " Hz";
+    MTEventAdminSetActionLimit(PlayerInRoom@ player, uint limit) {
+        msg = player.nameAndTitle + " set action limit to " + ActionLimitToHz(limit) + " Hz";
         col = vec4(1, 1., .2, 1.);
     }
-
 }
+
+class ChatMsgEvent : MTGameEvent {
+    ChatMsgEvent(ChatMessage@ cmsg) {
+        // PlayerInRoom@ player, const string &in msg, int64 ts
+        col = vec4(.9, .9, .9, 1);
+        if (cmsg.msgTy == ChatMsgTy::Server) {
+            col = cCyan;
+        } else if (cmsg.msgTy == ChatMsgTy::Team) {
+            col = cGreen;
+        }
+        this.msg = FormatTimestampMsShort(cmsg.timestamp) + " [ " + cmsg.player.nameAndTitle + " ]: " + (
+            cmsg.message.Length > S_ChatMsgLenLimit ? cmsg.message.SubStr(0, S_ChatMsgLenLimit) + "…" : cmsg.message
+        );
+    }
+}
+
 
 
 
@@ -116,10 +139,13 @@ class StatusMsgUI {
         // draw maps along top
         // draw game events
         float yDelta = BaseFontHeight + EventLogSpacing + 2.0;
-        for (int i = 0; i < int(state.activeEvents.Length); i++) {
-            if (state.activeEvents[i].RenderUpdate(dt, pos)) {
-                state.activeEvents.RemoveAt(i);
-                i--;
+        auto nbToDraw = int(state.activeEvents.Length);
+        auto ix = nbToDraw - 1;
+        for (int i = 0; i < nbToDraw; i++) {
+            ix = nbToDraw - i - 1;
+            if (state.activeEvents[ix].RenderUpdate(dt, pos)) {
+                state.activeEvents.RemoveAt(ix);
+                nbToDraw--;
                 if (state.activeEvents.Length == 0) return;
             } else {
                 pos.y += yDelta;

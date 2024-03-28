@@ -43,6 +43,7 @@ uint m_SizeZ = 48;
 
 
 uint m_ItemMaxSize = 0;
+uint16 m_PlayerLimit = 0xFFFF;
 
 void DrawCreateRoomForm_SetAll() {
     if (IsInEditor) {
@@ -175,6 +176,35 @@ void DrawCreateRoomForm_TopPart() {
     if (UI::Button(Icons::TrashO+"##clear-pw")) {
         m_Password = "";
     }
+    UI::SetNextItemWidth(200);
+    m_PlayerLimit = Math::Clamp(UI::InputInt("Player Limit", m_PlayerLimit), 2, 0xFFFF);
+
+
+    UI::SameLine();
+    if (UI::Button("8##max-players")) {
+        m_PlayerLimit = 8;
+    }
+    UI::SameLine();
+    if (UI::Button("16##max-players")) {
+        m_PlayerLimit = 16;
+    }
+    UI::SameLine();
+    if (UI::Button("32##max-players")) {
+        m_PlayerLimit = 32;
+    }
+    UI::SameLine();
+    if (UI::Button("64##max-players")) {
+        m_PlayerLimit = 64;
+    }
+    UI::SameLine();
+    if (UI::Button("128##max-players")) {
+        m_PlayerLimit = 128;
+    }
+    UI::SameLine();
+    if (UI::Button("∞##max-players")) {
+        m_PlayerLimit = 0xFFFF;
+    }
+
     UI::BeginDisabled();
     m_newRoomActionLimit = 0;
     m_AllowCustomItems = UI::Checkbox("Allow Custom Items", m_AllowCustomItems);

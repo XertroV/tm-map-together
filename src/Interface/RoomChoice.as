@@ -126,7 +126,7 @@ void ConnectToMapTogether_FreshMap() {
         @g_MTConn = null;
     }
     startnew(OnNewRoom_EditorOpenNewMap);
-    @g_MTConn = MapTogetherConnection(m_Password, false, m_newRoomActionLimit, m_Size, m_Mood | m_Base, m_Car, CalcRulesFlagFromForm(), m_ItemMaxSize);
+    @g_MTConn = MapTogetherConnection(m_Password, false, m_newRoomActionLimit, m_Size, m_Mood | m_Base, m_Car, CalcRulesFlagFromForm(), m_ItemMaxSize, m_PlayerLimit);
 }
 
 uint8 CalcRulesFlagFromForm() {
@@ -143,7 +143,7 @@ void InviteToMapTogetherRoom_ExistingMap() {
         g_MTConn.Close();
         @g_MTConn = null;
     }
-    @g_MTConn = MapTogetherConnection(m_Password, true, m_newRoomActionLimit, m_Size, m_Mood | m_Base, m_Car, CalcRulesFlagFromForm(), m_ItemMaxSize);
+    @g_MTConn = MapTogetherConnection(m_Password, true, m_newRoomActionLimit, m_Size, m_Mood | m_Base, m_Car, CalcRulesFlagFromForm(), m_ItemMaxSize, m_PlayerLimit);
 }
 
 void JoinMapTogetherRoom() {

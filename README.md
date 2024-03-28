@@ -13,26 +13,68 @@ Code/issues: [https://github.com/XertroV/tm-map-together](https://github.com/Xer
 GL HF
 
 
+0.1.5
+- numerous performance optimizations
+- add server chat (shift+enter hotkey)
+- expose many settings through settings tab in main UI
+- reduce overhead when processing updates (may partially resolve lag/frame issues)
+- add support for limiting players in a room
+- ms support for timestamps
+- add custom titles
+- fix player labels lerping to screen position instead of world position
+- support testing mode in cursor status color
+- smooth cursor anims a bit
+- add stats (under yield) for created and destroyed instances of plugin classes (can be used for debug)
+- flag to avoid using nostadium base patch in case of game crashes when opening editor
+- make max placement time a configurable setting
+- numerous additional settings
+- update support for next server version
+
+
+E++:
+- fix change of placement mode when freeblocks are deleted (item -> free-ground, for example)
+
+
+
+- many bugfixes
+- lowerable update frequency
+- player tag toggle
+- expose settings prelim
+
+
+
+to test:
+- [ ] crash with many players for an extended period (ref count > 1 million issue)
+- [ ] performance with 16+ players in a room over time (the 'lag' issue with long frames)
+- [ ] is the server reliably sending msgs?
+
 todo:
 recent:
-- [x] disable sweeps
-- [x] server issue limiting to 25 blocks, only triggers more on update
-- [x] limited undo support
-- [x] server: map size, base/mood, car, rules_flags,
 - [ ] better UI
-- [x] create map base
 - [ ] ping messages every 2s or so
 - [ ] timeout detection
-- [x] player join leave announcements (tmx together rip)
 - [ ] player stats (total placed, deleted, time spent, etc)
 - [ ] admin tools (kick / ban)
-- [x] status hud (processing updates) - pending updates hud
-- [x] follow mode (control camera)
+- [ ] follow mode (control camera)
 - [ ] time of day update msgs
 - [ ] custom items
 - [ ] server update msgs (alerts to active users that server will be going down)
+- [ ] undo stack bug
+- [ ] fade player labels based on distance from camera vs camera target distance
+- [ ] save session for playback
+- [ ] change room player limit
 
-
+- [x] server chat
+- [x] server: map size, base/mood, car, rules_flags,
+- [x] create map base
+- [x] player join leave announcements (tmx together rip)
+- [x] status hud (processing updates) - pending updates hud
+- [x] disable sweeps
+- [x] server issue limiting to 25 blocks, only triggers more on update
+- [x] limited undo support
+- [x] add room player limit
+- [x] free block del cursor change (items / ghost)
+- [x] settings tab
 - [x] block/prevent undo redo
 - [x] detect test mode and session, only update after
 - [x] add server choice

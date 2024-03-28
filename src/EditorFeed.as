@@ -141,14 +141,14 @@ namespace Editor {
             bool reportUpdates = false;
 
             if (delMb !is null) {
-                log_trace("sending deleted");
+                log_trace("sending deleted: " + delMb.Blocks.Length + " / " + delMb.Items.Length);
                 g_MTConn.WriteDeleted(delMb);
                 myUpdateStack.InsertLast(MTDeleteUpdate(delMb));
                 reportUpdates = true;
             }
 
             if (placeMb !is null) {
-                log_trace("sending placed");
+                log_trace("sending placed " + placeMb.Blocks.Length + " / " + placeMb.Items.Length);
                 g_MTConn.WritePlaced(placeMb);
                 myUpdateStack.InsertLast(MTPlaceUpdate(placeMb));
                 reportUpdates = true;
@@ -220,7 +220,7 @@ namespace Editor {
                 Editor_UndoToLastCached(editor);
 
                 uint startPlacing = Time::Now;
-                uint maxPlacingTime = startPlacing + 1500;
+                uint maxPlacingTime = startPlacing + S_MaximumPlacementTime;
                 bool autosave = false;
                 for (int i = 0; i < nbPendingUpdates; i++) {
                     if (maxPlacingTime < Time::Now) {

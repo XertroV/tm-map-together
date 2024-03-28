@@ -85,7 +85,7 @@ void SwapDecoHack() {
     Fids::Preload(stdDecoFid);
     if (stdDecoFid.Nod !is null && stdDecoFid.Nod.IdName == deco.IdName) {
         // same deco, do nothing
-    } else if (stdDecoFid.Nod !is null) {
+    } else if (stdDecoFid.Nod !is null && S_EnableNoStadiumHack) {
         log_warn("Swapping decos: " + stdDecoFid.Nod.IdName + " <-> " + deco.IdName);
         auto origNod = stdDecoFid.Nod;
         origNod.MwAddRef();

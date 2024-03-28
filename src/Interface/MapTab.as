@@ -4,6 +4,7 @@ void DrawMapInfoTab() {
         return;
     }
 
+    UI::Text("Player Limit: " + g_MTConn.playerLimit);
     UI::Text("Size: " + g_MTConn.mapSize.ToString());
     UI::Text("Base (encoded): " + g_MTConn.mapBase);
     UI::Text("Car: " + tostring(MapCar(g_MTConn.baseCar)));

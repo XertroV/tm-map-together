@@ -1,7 +1,39 @@
+uint MTUpdateCount_Created = 0;
+uint MTUpdateCount_Destroyed = 0;
+uint MTUpdateCount_Place_Created = 0;
+uint MTUpdateCount_Place_Destroyed = 0;
+uint MTUpdateCount_Delete_Created = 0;
+uint MTUpdateCount_Delete_Destroyed = 0;
+uint MTUpdateCount_SetSkin_Created = 0;
+uint MTUpdateCount_SetSkin_Destroyed = 0;
+uint MTUpdateCount_PlayerJoin_Created = 0;
+uint MTUpdateCount_PlayerJoin_Destroyed = 0;
+uint MTUpdateCount_PlayerLeave_Created = 0;
+uint MTUpdateCount_PlayerLeave_Destroyed = 0;
+uint MTUpdateCount_SetActionLimit_Created = 0;
+uint MTUpdateCount_SetActionLimit_Destroyed = 0;
+uint MTUpdateCount_PlayerCamCursor_Created = 0;
+uint MTUpdateCount_PlayerCamCursor_Destroyed = 0;
+uint MTUpdateCount_VehiclePos_Created = 0;
+uint MTUpdateCount_VehiclePos_Destroyed = 0;
+
+uint MTUpdateCount_ChatUpdate_Created = 0;
+uint MTUpdateCount_ChatUpdate_Destroyed = 0;
+
+uint MTUpdateCount_Meta_Created;
+uint MTUpdateCount_Meta_Destroyed;
 
 class MTUpdate {
     MTUpdateTy ty;
     MsgMeta@ meta;
+
+    MTUpdate() {
+        MTUpdateCount_Created++;
+    }
+
+    ~MTUpdate() {
+        MTUpdateCount_Destroyed++;
+    }
 
     bool Apply(CGameCtnEditorFree@ editor) {
         throw("implemented elsewhere");
@@ -16,6 +48,10 @@ class MTUpdate {
 }
 
 class MTUpdateUndoable : MTUpdate {
+    MTUpdateUndoable() {
+        super();
+    }
+
     bool Undo(CGameCtnEditorFree@ editor) {
         throw("implemented elsewhere");
         return false;
@@ -62,8 +98,14 @@ class MTUpdateUndoable : MTUpdate {
 class MTPlaceUpdate : MTUpdateUndoable {
     Editor::MacroblockSpec@ mb;
     MTPlaceUpdate(Editor::MacroblockSpec@ mb) {
+        super();
         this.ty = MTUpdateTy::Place;
         @this.mb = mb;
+        MTUpdateCount_Place_Created++;
+    }
+
+    ~MTPlaceUpdate() {
+        MTUpdateCount_Place_Destroyed++;
     }
 
     bool Apply(CGameCtnEditorFree@ editor) override {
@@ -83,7 +125,7 @@ class MTPlaceUpdate : MTUpdateUndoable {
     }
 
     void GenerateStatusText() override {
-        string name = g_MTConn !is null ? g_MTConn.FindPlayerEver(meta.playerId).name : meta.playerId;
+        string name = g_MTConn !is null ? g_MTConn.FindPlayerEver(meta.playerMwId).name : meta.playerId;
         _StatusText = name + " | Place: " + mb.Blocks.Length + " blocks, " + mb.Items.Length + " items";
     }
 
@@ -96,8 +138,14 @@ class MTPlaceUpdate : MTUpdateUndoable {
 class MTDeleteUpdate : MTUpdateUndoable {
     Editor::MacroblockSpec@ mb;
     MTDeleteUpdate(Editor::MacroblockSpec@ mb) {
+        super();
         this.ty = MTUpdateTy::Delete;
         @this.mb = mb;
+        MTUpdateCount_Delete_Created++;
+    }
+
+    ~MTDeleteUpdate() {
+        MTUpdateCount_Delete_Destroyed++;
     }
 
     bool Apply(CGameCtnEditorFree@ editor) override {
@@ -130,7 +178,7 @@ class MTDeleteUpdate : MTUpdateUndoable {
     }
 
     void GenerateStatusText() override {
-        string name = g_MTConn !is null ? g_MTConn.FindPlayerEver(meta.playerId).name : meta.playerId;
+        string name = g_MTConn !is null ? g_MTConn.FindPlayerEver(meta.playerMwId).name : meta.playerId;
         _StatusText = name + " | Delete: " + mb.Blocks.Length + " blocks, " + mb.Items.Length + " items";
     }
 }
@@ -138,8 +186,14 @@ class MTDeleteUpdate : MTUpdateUndoable {
 class MTSetSkinUpdate : MTUpdate {
     Editor::SetSkinSpec@ skin;
     MTSetSkinUpdate(Editor::SetSkinSpec@ skin) {
+        super();
         this.ty = MTUpdateTy::SetSkin;
         @this.skin = skin;
+        MTUpdateCount_SetSkin_Created++;
+    }
+
+    ~MTSetSkinUpdate() {
+        MTUpdateCount_SetSkin_Destroyed++;
     }
 
     bool Apply(CGameCtnEditorFree@ editor) override {
@@ -154,8 +208,14 @@ class MTSetSkinUpdate : MTUpdate {
 class PlayerJoinUpdate : MTUpdate {
     string playerName;
     PlayerJoinUpdate(MemoryBuffer@ buf) {
+        super();
         this.ty = MTUpdateTy::PlayerJoin;
         playerName = ReadLPStringFromBuffer(buf);
+        MTUpdateCount_PlayerJoin_Created++;
+    }
+
+    ~PlayerJoinUpdate() {
+        MTUpdateCount_PlayerJoin_Destroyed++;
     }
 
     bool Apply(CGameCtnEditorFree@ editor) override {
@@ -168,8 +228,14 @@ class PlayerJoinUpdate : MTUpdate {
 class PlayerLeaveUpdate : MTUpdate {
     string playerName;
     PlayerLeaveUpdate(MemoryBuffer@ buf) {
+        super();
         this.ty = MTUpdateTy::PlayerLeave;
         playerName = ReadLPStringFromBuffer(buf);
+        MTUpdateCount_PlayerLeave_Created++;
+    }
+
+    ~PlayerLeaveUpdate() {
+        MTUpdateCount_PlayerLeave_Destroyed++;
     }
 
     bool Apply(CGameCtnEditorFree@ editor) override {
@@ -182,19 +248,26 @@ class PlayerLeaveUpdate : MTUpdate {
 class SetActionLimitUpdate : MTUpdate {
     uint limit;
     SetActionLimitUpdate(MemoryBuffer@ buf) {
+        super();
         this.ty = MTUpdateTy::Admin_SetActionLimit;
         limit = buf.ReadUInt32();
+        MTUpdateCount_SetActionLimit_Created++;
+    }
+
+    ~SetActionLimitUpdate() {
+        MTUpdateCount_SetActionLimit_Destroyed++;
     }
 
     bool Apply(CGameCtnEditorFree@ editor) override {
         if (g_MTConn !is null) {
-            if (g_MTConn.FindAdmin(meta.playerId) is null) {
+            auto p = g_MTConn.FindAdmin(meta.playerMwId);
+            if (p is null) {
                 log_warn("Player " + meta.playerId + " is not an admin and cannot set action limit");
                 return false;
             }
             log_info('Applying set action limit: ' + limit);
             g_MTConn.actionRateLimit = limit;
-            g_MTConn.statusMsgs.AddGameEvent(MTEventAdminSetActionLimit(meta.playerName, limit));
+            g_MTConn.statusMsgs.AddGameEvent(MTEventAdminSetActionLimit(p, limit));
         }
         return false;
     }
