@@ -21,6 +21,9 @@ namespace Chat {
             DrawChatTab();
         }
         UI::End();
+        if (UI::IsWindowAppearing() && g_MTConn !is null) {
+            g_MTConn.serverChat.scrollToBottom = true;
+        }
     }
 }
 
@@ -69,6 +72,7 @@ class ServerChat {
     }
 
     string m_chatMsg = "";
+    bool scrollToBottom = false;
 
     void DrawChatUI() {
         if (g_MTConn is null) return;
@@ -81,6 +85,10 @@ class ServerChat {
                     messages[i].DrawChatRow();
                 }
             }
+            if (scrollToBottom) {
+                scrollToBottom = false;
+                UI::SetScrollY(UI::GetScrollMaxY());
+            }
         }
         UI::EndChild();
         DrawChatInput();
@@ -88,6 +96,7 @@ class ServerChat {
 
     void DrawChatInput() {
         if (g_RefocusChat) {
+            scrollToBottom = true;
             g_RefocusChat = false;
             UI::SetKeyboardFocusHere(0);
         }
@@ -117,6 +126,7 @@ class ServerChat {
             if (g_MTConn is null) {
                 NotifyError("MapTogether connection null");
             } else if (m_chatMsg.Length > 0) {
+                scrollToBottom = true;
                 g_MTConn.SendChatMessage(ChatMsgTy::Room, m_chatMsg);
                 m_chatMsg = "";
             }

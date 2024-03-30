@@ -12,4 +12,10 @@ void DrawSuperAdminUI() {
         }
     }
 
+    UI::Separator();
+
+    if (UI::Button("Test Placing Custom Notif")) {
+        auto p = g_MTConn.playersInRoom[0];
+        g_MTConn.statusMsgs.AddGameEvent(UserPlacedMissingBlockItemEvent(p, "TEST.Item.Gbx"));
+    }
 }

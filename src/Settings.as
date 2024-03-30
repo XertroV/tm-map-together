@@ -29,7 +29,7 @@ bool S_PlayerTagsAsCameraTargetOnly = false;
 uint S_MaximumPlacementTime = 1500;
 
 [Setting hidden]
-uint S_UpdateMS_Clamped = 250;
+uint S_UpdateMS_Clamped = 200;
 
 [Setting hidden]
 bool S_PassthroughAllLogs = true;
@@ -43,7 +43,7 @@ uint S_ChatMsgLenLimit = 45;
 
 [SettingsTab name="Other"]
 void RenderST_Other() {
-    S_UpdateMS_Clamped = Math::Clamp(UI::InputInt("Cursor/V Update Frequence (ms)", S_UpdateMS_Clamped), 100, 100000);
+    S_UpdateMS_Clamped = Math::Clamp(UI::InputInt("Cursor/V Update Frequence (ms)", S_UpdateMS_Clamped), 50, 100000);
 }
 
 

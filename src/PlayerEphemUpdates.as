@@ -307,12 +307,16 @@ class VehiclePos : MTUpdate, HasPlayerLabelDraw {
     }
 
     void RenderNvg(const string &in name) {
-        auto pos = vec3(mat.tx, mat.ty, mat.tz);
-        auto screenPos = Camera::ToScreen(pos);
-        if (screenPos.z > 0.0) return;
+        drawAtWorldPos = vec3(mat.tx, mat.ty, mat.tz);
+        if (lastDrawWorldPos.LengthSquared() > 1.0) {
+            drawAtWorldPos = Math::Lerp(lastDrawWorldPos, drawAtWorldPos, 1. - Math::Exp(animLambda * lastDt * 0.001));
+        }
+        lastDrawWorldPos = drawAtWorldPos;
+        screenTextPos = Camera::ToScreen(drawAtWorldPos);
+        if (screenTextPos.z > 0.0) return;
 
-        screenTextPos = Math::Lerp(lastScreenTextPos, screenPos, 1. - Math::Exp(animLambda * lastDt * 0.001));
-        if (lastScreenTextPos.LengthSquared() == 0) lastScreenTextPos = screenTextPos;
+        // screenTextPos = Math::Lerp(lastScreenTextPos, screenPos, 1. - Math::Exp(animLambda * lastDt * 0.001));
+        // if (lastScreenTextPos.LengthSquared() == 0) lastScreenTextPos = screenTextPos;
         lastScreenTextPos = screenTextPos;
         DrawPlayerLabel(name, screenTextPos.xy, cWhite, cRed25);
         nvgDrawPointCross(screenTextPos.xy, S_PlayerLabelHeight * .5, cLimeGreen);

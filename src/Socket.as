@@ -849,6 +849,7 @@ enum MTUpdateTy {
 
 
 PlayerCamCursor@ tmpPlayerCamCursor = PlayerCamCursor();
+VehiclePos@ tmpVehiclePos = VehiclePos();
 
 MTUpdate@ BufToMTUpdate(MTUpdateTy ty, MemoryBuffer@ buf) {
     switch (ty) {
@@ -897,7 +898,7 @@ MTUpdate@ BufToMTUpdate(MTUpdateTy ty, MemoryBuffer@ buf) {
         case MTUpdateTy::PlayerCamCursor:
             return tmpPlayerCamCursor.ReadFromBuf(buf);
         case MTUpdateTy::VehiclePos:
-            return VehiclePos(buf);
+            return tmpVehiclePos.ReadFromBuf(buf);
         case MTUpdateTy::Admin_SetActionLimit:
             return SetActionLimitUpdate(buf);
         case MTUpdateTy::ChatMsg:
@@ -981,6 +982,10 @@ class MsgMeta {
 
     ~MsgMeta() {
         MTUpdateCount_Meta_Destroyed++;
+    }
+
+    PlayerInRoom@ GetPlayer() {
+        return g_MTConn.FindPlayerInRoom(playerMwId);
     }
 }
 
@@ -1187,15 +1192,16 @@ class PlayerInRoom {
             auto camRot = mat4::Inverse(mat4::Inverse(translation) * camMat);
             auto pyr = PitchYawRollFromRotationMatrix(camRot);
             Editor::SetCamAnimationGoTo(vec2(pyr.y, pyr.x), targetPos, targetDist);
+            // log_trace('set editor cam anim');
         } else {
-            auto editor = cast<CGameCtnEditorFree>(GetApp().Editor);
-            if (editor !is null) {
-                auto camPos = editor.OrbitalCameraControl.Pos;
-                auto vMat = lastVehiclePos.mat;
-                auto vPos = vec3(vMat.tx, vMat.ty, vMat.tz);
-                float dist = 90.0;
-                Editor::SetCamAnimationGoTo(DirToLookUv((vPos - camPos)), vPos, dist);
-            }
+            // vec3 camPos = editor.OrbitalCameraControl.Pos;
+            auto vMat = lastVehiclePos.mat;
+            vec3 vPos = vec3(vMat.tx, vMat.ty, vMat.tz);
+            float dist = 90.0;
+            // how is this an unbound function?
+            auto lookDir = Editor::DirToLookUvFromCamera(vPos);
+            Editor::SetCamAnimationGoTo(lookDir, vPos, dist);
+            // log_trace('set editor vehicle pos cam anim');
         }
         if (lockCam) {
             UnlockEditorCamera();
@@ -1210,8 +1216,10 @@ class PlayerInRoom {
         while (lockingEditorCamera) {
             @g_CamLockedToPlayer = this;
             FocusEditorCamera();
+            log_trace('locking editor cam');
             yield();
         }
+        log_trace('break loop locking editor cam');
     }
 
     void UnlockCamera() {

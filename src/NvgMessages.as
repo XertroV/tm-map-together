@@ -17,6 +17,7 @@ class MTGameEvent {
     vec4 col = vec4(1, 1, 1, 1);
     string msg = "undefined";
     float animDuration = 5.0;
+    float fadeDuration = 1.0;
     float currTime = 0.0;
     float t = 0.0;
     float baseFontSize = BaseFontHeight;
@@ -34,8 +35,8 @@ class MTGameEvent {
         currTime += dt / 1000.;
         t = currTime / animDuration;
         if (t > 1.) return true;
-        float alpha = Math::Clamp(5. - t * 5., 0., 1.);
-        float fs = baseFontSize * Math::Clamp((t + .2), 1, 1.0);
+        float alpha = Math::Clamp(animDuration * (1.0 - t) / fadeDuration, 0., 1.0);
+        float fs = baseFontSize * 1.0; //Math::Clamp((t + .2), 1, 1.0);
         nvg::BeginPath();
         nvg::FontSize(fs);
         nvg::TextAlign(nvg::Align::Left | nvg::Align::Top);
@@ -108,6 +109,15 @@ class ChatMsgEvent : MTGameEvent {
     }
 }
 
+class UserPlacedMissingBlockItemEvent : MTGameEvent {
+    UserPlacedMissingBlockItemEvent(PlayerInRoom@ player, const string &in item) {
+        msg = player.nameAndTitle + " placed " + item;
+        col = vec4(1, .9, .9, 1.);
+        bgCol = vec4(.2, 0, 0, 0.9);
+        animDuration = 10.0;
+    }
+}
+
 
 
 
@@ -134,6 +144,8 @@ class StatusMsgUI {
     void RenderUpdate(float dt) {
         nvg::Reset();
         nvg::FontFace(f_Nvg_Montserrat);
+        nvg::StrokeWidth(0);
+        nvg::StrokeColor(vec4());
         // for game events
         vec2 pos = GameEventsTopLeft;
         // draw maps along top
@@ -151,6 +163,7 @@ class StatusMsgUI {
                 pos.y += yDelta;
             }
         }
+        nvg::BeginPath();
     }
 }
 

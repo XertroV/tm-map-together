@@ -55,7 +55,7 @@ recent:
 - [ ] timeout detection
 - [ ] player stats (total placed, deleted, time spent, etc)
 - [ ] admin tools (kick / ban)
-- [ ] follow mode (control camera)
+- [?] follow mode (control camera)
 - [ ] time of day update msgs
 - [ ] custom items
 - [ ] server update msgs (alerts to active users that server will be going down)
@@ -63,12 +63,6 @@ recent:
 - [ ] fade player labels based on distance from camera vs camera target distance
 - [ ] save session for playback
 - [ ] change room player limit
-- [ ] add admin can always join thing
-- [ ] chat log snap to bottom
-- [ ] server lockup
-- [ ] press left and down -> crash?
-- [ ] name custom block abusers
-- [x] server lockup and disconnect reconnect
 - [ ] remove custom item from cursor
 - [ ] on-grid free block only
 - [ ] auto-duplicate detection
@@ -76,8 +70,18 @@ recent:
 - [ ] map partitioning idea for testing without interference
 - [ ] save mapper metadata in track
 - [ ] add app setting for tmx author (autorecord in metadata)
+- [ ] colored names
+
+
+- [x] dynamic ratelimiting of cursor updates (more ppl -> less often)
+- [x] optimize vehicle pos update packets
+- [x] add admin can always join thing
+- [x] chat log snap to bottom
+- [x] name custom block abusers
+- [x] server lockup and disconnect reconnect
 - [x] chat use server timestamp
 - [x] leaving bug
+- [x] vehicle marker jelly
 
 
 - [x] server chat

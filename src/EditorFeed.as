@@ -222,6 +222,7 @@ namespace Editor {
                 uint startPlacing = Time::Now;
                 uint maxPlacingTime = startPlacing + S_MaximumPlacementTime;
                 bool autosave = false;
+                MTUpdate@ update;
                 for (int i = 0; i < nbPendingUpdates; i++) {
                     if (maxPlacingTime < Time::Now) {
                         auto remainingUpdates = nbPendingUpdates - i;
@@ -230,8 +231,10 @@ namespace Editor {
                         nbPendingUpdates = i;
                         break;
                     }
-                    autosave = g_MTConn.pendingUpdates[i].Apply(editor) || autosave;
-                    log_trace("!!!!!!!!!!!!!!!!!!    "+tostring(g_MTConn.pendingUpdates[i].ty)+"       applied pending update: " + i);
+                    @update = g_MTConn.pendingUpdates[i];
+                    autosave = update.Apply(editor) || autosave;
+                    log_trace("!!!!!!!!!!!!!!!!!!    "+tostring(update.ty)+"       applied pending update: " + i);
+                    CheckUpdateForMissingBlocksItems(update);
                 }
                 if (g_MTConn.pendingUpdates[nbPendingUpdates - 1].ty == MTUpdateTy::Place) {
                     @lastAppliedPlaceMb = cast<MTPlaceUpdate>(g_MTConn.pendingUpdates[nbPendingUpdates - 1]).mb;
@@ -272,6 +275,19 @@ namespace Editor {
         Patch_DisableSweeps.Unapply();
     }
 
+    void CheckUpdateForMissingBlocksItems(MTUpdate@ update) {
+        if (!update.isUndoable) return;
+        auto place = cast<MTPlaceUpdate>(update);
+        if (place !is null) {
+            for (uint i = 0; i < place.mb.Blocks.Length; i++) {
+                if (place.mb.Blocks[i].BlockInfo is null) {
+                    g_MTConn.statusMsgs.AddGameEvent(UserPlacedMissingBlockItemEvent(update.meta.GetPlayer(), place.mb.Blocks[i].name));
+                }
+            }
+            return;
+        }
+    }
+
     void Editor_CachePosInUndoStack(CGameCtnEditorFree@ editor) {
         cacheAutosavedIx = GetAutosaveStackPos(GetAutosaveStructPtr(editor));
     }
@@ -300,12 +316,18 @@ namespace Editor {
     uint lastUpdateCursorCheck = 0;
     uint updateEveryMs {
         get {
-            return Math::Max(S_UpdateMS_Clamped, 100);
+            return Math::Max(
+                Math::Max(S_UpdateMS_Clamped, 50),
+                g_MTConn !is null
+                    ? Math::Min(g_MTConn.playersInRoom.Length * 50, 3000)
+                    : 50
+            );
         }
     }
 
     void CheckUpdateVehicle(CSmArenaClient@ pg) {
-        if (lastUpdateVehicleCheck + updateEveryMs > Time::Now) return;
+        // add some randomness to help break messages up so they don't all arrive at once
+        if (lastUpdateVehicleCheck + updateEveryMs + Math::Rand(0, 200) > Time::Now) return;
         if (pg is null || pg.GameTerminals.Length == 0) return;
         auto player = cast<CSmPlayer>(pg.GameTerminals[0].ControlledPlayer);
         if (player is null) return;
