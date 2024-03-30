@@ -88,15 +88,21 @@ namespace Editor {
         MacroblockSpec@ placeMb;
         MacroblockSpec@ delMb;
 
+        bool wasInPlayground = false;
         while (app.Editor !is null) {
+            wasInPlayground = false;
             while (app.CurrentPlayground !is null || cast<CGameCtnEditorFree>(app.Editor) is null || app.LoadProgress.State != NGameLoadProgress::EState::Disabled) {
                 if (g_MTConn is null) break;
                 CheckUpdateVehicle(cast<CSmArenaClient>(app.CurrentPlayground));
+                wasInPlayground = true;
                 // g_MTConn.PauseAutoRead = true;
                 // ReadIntoPendingMessagesWithDiscard();
                 yield();
             }
-
+            if (wasInPlayground) {
+                wasInPlayground = false;
+                yield();
+            }
             if (g_MTConn is null) break;
 
             // g_MTConn.PauseAutoRead = false;
@@ -154,12 +160,11 @@ namespace Editor {
                 reportUpdates = true;
             }
 
-            // ignore set skins for now (infinite loop glitch oops)
-            // if (setSkins.Length > 0) {
-            //     log_trace("sending set skins");
-            //     g_MTConn.WriteSetSkins(setSkins);
-            //     reportUpdates = true;
-            // }
+            if (S_EnableSettingSkins && setSkins.Length > 0) {
+                log_trace("sending set skins");
+                g_MTConn.WriteSetSkins(setSkins);
+                reportUpdates = true;
+            }
 
             // if (!g_MTConn.socket.CanRead()) {
             //     log_warn('can read: false');

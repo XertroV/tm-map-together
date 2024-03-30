@@ -71,16 +71,20 @@ recent:
 - [ ] save mapper metadata in track
 - [ ] add app setting for tmx author (autorecord in metadata)
 - [ ] colored names
+- [ ] add compression to macroblocks (detect place-deletes, delete-places, repeated skin application, etc)
+- [ ]
 
 
-- [x] dynamic ratelimiting of cursor updates (more ppl -> less often)
+- [x] enable skins -- can be disabled in settings under optional features
+- [x] add one frame delay after leaving test mode
+- [x] dynamic rate-limiting of cursor updates (more ppl -> less often)
 - [x] optimize vehicle pos update packets
 - [x] add admin can always join thing
 - [x] chat log snap to bottom
 - [x] name custom block abusers
-- [x] server lockup and disconnect reconnect
+- [x] fix server lockup and disconnect reconnect
 - [x] chat use server timestamp
-- [x] leaving bug
+- [x] players in list after leaving bug
 - [x] vehicle marker jelly
 
 
@@ -104,8 +108,6 @@ recent:
 - follow mode -- update camera to match user
 
 
-- version checking
-  - can abuse bad room id for version?
 
 - room options:
   - allow custom items

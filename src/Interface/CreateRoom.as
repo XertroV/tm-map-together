@@ -1,25 +1,4 @@
 
-enum MapMood {
-    Day = 0,
-    Night = 1,
-    Sunset = 2,
-    Sunrise = 3,
-}
-
-enum MapBase {
-    NoStadium = 32,
-    StadiumOld = 64,
-    Stadium155 = 128,
-}
-
-enum MapCar {
-    CarSport,
-    CarSnow,
-    CarRally,
-    CarDesert,
-}
-
-
 string m_Password = "";
 bool m_AllowCustomItems = false;
 bool m_AllowSweeps = false;

@@ -48,7 +48,8 @@ void RenderST_Other() {
 
 
 
-
+[Setting hidden]
+bool S_EnableSettingSkins = true;
 
 
 
@@ -81,6 +82,14 @@ void DrawSettingsGameUiTab() {
 
     S_ChatMsgLenLimit = Math::Clamp(UI::InputInt("Chat Message Length Limit (Status Msgs)", S_ChatMsgLenLimit), 10, 500);
     AddSimpleTooltip("The maximum length of a chat message to show as a status message.");
+
+    UI::Separator();
+    UI::AlignTextToFramePadding();
+    UI::Text("\\$ddd >> Optional Features");
+
+    S_EnableSettingSkins = UI::Checkbox("Enable Setting Skins   \\$f84" + Icons::ExclamationTriangle, S_EnableSettingSkins);
+    AddSimpleTooltip("This will send skin updates and apply recieved updates. Disable if there's like an infinite loop or something going on.");
+
 
     UI::Separator();
     UI::AlignTextToFramePadding();

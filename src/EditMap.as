@@ -2,6 +2,10 @@ nat3 decoOrigSize;
 CGameCtnDecoration@ decoEditMap;
 
 void EditNewMapFrom(MapBase base, MapMood mood, MapCar vehicle, nat3 size) {
+    if (!Permissions::OpenAdvancedMapEditor()) {
+        NotifyError("You don't have permission to open the advanced map editor");
+        return;
+    }
     if (decoEditMap !is null) {
         trace('releasing deco');
         decoEditMap.MwRelease();

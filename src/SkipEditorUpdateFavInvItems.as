@@ -11,6 +11,24 @@ MemPatcher@ Patch_SkipClubFavItemUpdate = MemPatcher(
 );
 
 
+namespace EditorPatches {
+    bool get_DisableClubItems_IsApplied() {
+        return Patch_DisableClubFavItems.IsApplied;
+    }
+    void set_DisableClubItems_IsApplied(bool value) {
+        Patch_DisableClubFavItems.IsApplied = value;
+    }
+
+    bool get_SkipClubFavItemUpdate_IsApplied() {
+        return Patch_SkipClubFavItemUpdate.IsApplied;
+    }
+    void set_SkipClubFavItemUpdate_IsApplied(bool value) {
+        Patch_SkipClubFavItemUpdate.IsApplied = value;
+    }
+}
+
+
+
 /*
     v init DL, nop to save resources
     E8 CB F6 FF FF 48 8B 0F 48 83 79 10 FF 0F 85 2E 19 00 00 48 8B 81 18 01 00 00 48 8D 91 38 01 00 00 4D 8B 46 18 4C 8D 4C 24 60 48 89 45 50 8B 81 20 01 00 00
