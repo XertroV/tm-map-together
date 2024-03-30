@@ -39,10 +39,12 @@ class ChatMessage {
     uint64 timestamp;
     ChatMsgTy msgTy;
 
-    ChatMessage(PlayerInRoom@ player, uint8 type, const string &in msg) {
+    ChatMessage(PlayerInRoom@ player, uint8 type, const string &in msg, uint64 timestamp = 0) {
         if (type > 4) throw("Invalid chat msg type");
         msgTy = ChatMsgTy(type);
-        timestamp = GetAccurateTimestampMs();
+        if (timestamp == 0) {
+            timestamp = GetAccurateTimestampMs();
+        }
         @this.player = player;
         message = msg;
         ui_msg = "\\$ddd" + FormatTimestampMsShort(timestamp) + "\\$z [ " + player.nameAndTitle + " ]: " + msg;

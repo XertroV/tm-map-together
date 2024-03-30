@@ -63,6 +63,22 @@ recent:
 - [ ] fade player labels based on distance from camera vs camera target distance
 - [ ] save session for playback
 - [ ] change room player limit
+- [ ] add admin can always join thing
+- [ ] chat log snap to bottom
+- [ ] server lockup
+- [ ] press left and down -> crash?
+- [ ] name custom block abusers
+- [x] server lockup and disconnect reconnect
+- [ ] remove custom item from cursor
+- [ ] on-grid free block only
+- [ ] auto-duplicate detection
+- [ ] compress macroblocks
+- [ ] map partitioning idea for testing without interference
+- [ ] save mapper metadata in track
+- [ ] add app setting for tmx author (autorecord in metadata)
+- [x] chat use server timestamp
+- [x] leaving bug
+
 
 - [x] server chat
 - [x] server: map size, base/mood, car, rules_flags,

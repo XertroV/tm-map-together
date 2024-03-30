@@ -479,7 +479,9 @@ class MapTogetherConnection {
         auto p = FindPlayerInRoom(update.meta.playerMwId);
         if (p is null) {
             @p = FindPlayerEver(update.meta.playerMwId);
-            AddPlayer(p);
+            if (p !is null && update.ty != MTUpdateTy::PlayerLeave) {
+                AddPlayer(p);
+            }
         }
         if (p is null) return;
         p.UpdateStats(update);

@@ -171,6 +171,7 @@ void DrawLogsTab() {
     UI::SameLine();
     if (UI::Button("Clear Logs")) {
         logs.RemoveRange(0, logs.Length);
+        nbLogs = 0;
     }
     if (UI::BeginChild("logschild", vec2(), false, UI::WindowFlags::AlwaysVerticalScrollbar)) {
         UI::ListClipper clip(nbLogs);

@@ -351,4 +351,5 @@ void DrawCreateRoomForm_BottomPart_Immutable(MapMood mood, MapBase base, MapCar 
     UI::Text("Map Base: " + MapBaseToString(base));
     UI::Text("Map Car: " + MapCarToString(car));
     UI::Text("Map Size: " + size.ToString());
+    m_Size = size;
 }
