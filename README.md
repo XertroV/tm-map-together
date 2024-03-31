@@ -189,3 +189,23 @@ what if 2 ppl load diff maps
 
 - need a feed of all objects placed/deleted
 - can do E++ stuff by using MB to nudge, instead of modifying and refreshing -- that will be compatible with hooks
+
+
+## problems to solve
+
+- finding blocks in large map:
+  - points (not regions)
+  - oct tree
+  - expand as more blocks placed
+  - faster duplicate block checks?
+  - export from E++
+  - tie into map cache and block/item hooks
+- comparing maps to calculated spec
+- finding differences between calculated and actual
+  - use oct tree?
+
+- undo
+  - we have a local stack
+  - need to ignore action from our undo queue
+    - keep track of index?
+    - ignore most recent flag

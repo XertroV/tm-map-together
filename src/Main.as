@@ -590,6 +590,7 @@ void OnPressUndoInEditor() {
         if (myUpdateStack.Length > 0) {
             myUpdateStack.RemoveLast();
         }
+        Editor::m_ShouldIgnoreNextAction = true;
     } else if (currAutosaveIx == cacheAutosavedIx && AreMacroblockSpecsEq(lastLocalPlaceMb, lastAppliedPlaceMb)) {
         log_debug("Allowing undo since our last placed MB was the last applied");
         editor.PluginMapType.Undo();
@@ -598,18 +599,18 @@ void OnPressUndoInEditor() {
         if (myUpdateStack.Length > 0) {
             myUpdateStack.RemoveLast();
         }
+        Editor::m_ShouldIgnoreNextAction = true;
     } else if (myUpdateStack.Length > 0) {
         log_debug("Doing virtual undo based on recorded actions.");
         auto lastUpdate = myUpdateStack[myUpdateStack.Length - 1];
-        // could be used for undoing skins maybe?
-        if (false && lastUpdate is null) {
-            log_debug("Allowing undo since last update was null");
-            editor.PluginMapType.Undo();
-        } else {
+        if (lastUpdate !is null) {
             lastUpdate.Undo(editor);
             editor.PluginMapType.AutoSave();
+            Editor::m_ShouldIgnoreNextAction = true;
         }
         myUpdateStack.RemoveLast();
+    } else {
+        log_debug("Nothing to undo.");
     }
 }
 

@@ -57,6 +57,8 @@ namespace Editor {
     //     }
     // }
 
+    bool m_ShouldIgnoreNextAction = false;
+
     void EditorFeedGen_Loop() {
         ResetOnEnterEditor();
         UserUndoRedoDisablePatchEnabled = true;
@@ -163,14 +165,18 @@ namespace Editor {
             if (delMb !is null) {
                 log_trace("sending deleted: " + delMb.Blocks.Length + " / " + delMb.Items.Length);
                 g_MTConn.WriteDeleted(delMb);
-                myUpdateStack.InsertLast(MTDeleteUpdate(delMb));
+                if (!m_ShouldIgnoreNextAction) {
+                    myUpdateStack.InsertLast(MTDeleteUpdate(delMb));
+                }
                 reportUpdates = true;
             }
 
             if (placeMb !is null) {
                 log_trace("sending placed " + placeMb.Blocks.Length + " / " + placeMb.Items.Length);
                 g_MTConn.WritePlaced(placeMb);
-                myUpdateStack.InsertLast(MTPlaceUpdate(placeMb));
+                if (!m_ShouldIgnoreNextAction) {
+                    myUpdateStack.InsertLast(MTPlaceUpdate(placeMb));
+                }
                 reportUpdates = true;
             }
 
@@ -182,6 +188,11 @@ namespace Editor {
                 log_debug("ignoring " + setSkins.Length + " set skins");
             }
 
+            if (m_ShouldIgnoreNextAction) {
+                @lastLocalDeleteMb = null;
+                @lastLocalPlaceMb = null;
+                m_ShouldIgnoreNextAction = false;
+            }
 
             if (!editor.PluginMapType.IsEditorReadyForRequest) {
                 yield();
