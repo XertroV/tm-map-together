@@ -72,9 +72,10 @@ recent:
 - [ ] add app setting for tmx author (autorecord in metadata)
 - [ ] colored names
 - [ ] add compression to macroblocks (detect place-deletes, delete-places, repeated skin application, etc)
-- [ ]
+- [ ] add ding on chat msg (or one that mentions your name only maybe)
 
 
+- [x] fix undo
 - [x] enable skins -- can be disabled in settings under optional features
 - [x] add one frame delay after leaving test mode
 - [x] dynamic rate-limiting of cursor updates (more ppl -> less often)
