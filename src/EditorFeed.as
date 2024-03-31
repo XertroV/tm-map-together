@@ -19,7 +19,7 @@ void ResetOnEnterEditor() {
 
 uint cacheAutosavedIx = 0;
 
-MTUpdateUndoable@[] myUpdateStack;
+MTUpdateUndoable@[] myUpdateStack = {};
 
 namespace Editor {
     // Run Context: MainLoop and GameLoop seem to work
@@ -85,6 +85,7 @@ namespace Editor {
         const array<ItemSpec@>@ placedI;
         const array<ItemSpec@>@ delI;
         const array<SetSkinSpec@>@ setSkins;
+        const array<SetSkinSpec@>@ lastSetSkins;
         MacroblockSpec@ placeMb;
         MacroblockSpec@ delMb;
 
@@ -108,7 +109,10 @@ namespace Editor {
             // g_MTConn.PauseAutoRead = false;
             @editor = cast<CGameCtnEditorFree>(app.Editor);
             if (editor is null) { yield(); continue; }
-            if (!editor.PluginMapType.IsEditorReadyForRequest) { yield(); continue; }
+
+            // Note: editor.PluginMapType.IsEditorReadyForRequest is false when in skinning mode
+            // we still want to listen for updates, though, so we continue through until we get to actually applying updates and skip at that point.
+
             CheckUpdateCursor(editor);
 
             // by getting the placed/del for this frame at this point, our actions will be cleared before the next frame.
@@ -117,6 +121,10 @@ namespace Editor {
             @placedI = Editor::ThisFrameItemsPlaced();
             @delI = Editor::ThisFrameItemsDeleted();
             @setSkins = Editor::ThisFrameSkinsSet();
+            @lastSetSkins = Editor::LastFrameSkinsSet();
+            // trace('setSkins: ' + setSkins.Length);
+            // trace('setSkinsApi: ' + Editor::ThisFrameSkinsSetByAPI().Length);
+            // trace('setSkinsLastFrame: ' + Editor::LastFrameSkinsSet().Length);
 
             uint origPlacedTotal = placedB.Length + placedI.Length;
             uint origDelTotal = delB.Length + delI.Length;
@@ -144,6 +152,12 @@ namespace Editor {
                 Notify("Todo: set skins; got len: " + setSkins.Length);
             }
 
+            if (delMb is null && placeMb is null && setSkins.Length > 0) {
+                // cache autosave to avoid overwriting skins set
+                Editor_CachePosInUndoStack(editor);
+                log_trace("Cached autosave pos b/c skins set: " + setSkins.Length);
+            }
+
             bool reportUpdates = false;
 
             if (delMb !is null) {
@@ -164,7 +178,16 @@ namespace Editor {
                 log_trace("sending set skins");
                 g_MTConn.WriteSetSkins(setSkins);
                 reportUpdates = true;
+            } else if (!S_EnableSettingSkins && setSkins.Length > 0) {
+                log_debug("ignoring " + setSkins.Length + " set skins");
             }
+
+
+            if (!editor.PluginMapType.IsEditorReadyForRequest) {
+                yield();
+                continue;
+            }
+
 
             // if (!g_MTConn.socket.CanRead()) {
             //     log_warn('can read: false');
@@ -208,6 +231,7 @@ namespace Editor {
                     log_trace("cacheAutosavedIx: " + cacheAutosavedIx);
                 }
             }
+
             if (!skipNormalProcessing && nbPendingUpdates > 0) {
                 auto pmt = editor.PluginMapType;
 
@@ -332,7 +356,7 @@ namespace Editor {
 
     void CheckUpdateVehicle(CSmArenaClient@ pg) {
         // add some randomness to help break messages up so they don't all arrive at once
-        if (lastUpdateVehicleCheck + updateEveryMs + Math::Rand(0, 200) > Time::Now) return;
+        if (lastUpdateVehicleCheck + updateEveryMs + uint(Math::Rand(0, 200)) > uint(Time::Now)) return;
         if (pg is null || pg.GameTerminals.Length == 0) return;
         auto player = cast<CSmPlayer>(pg.GameTerminals[0].ControlledPlayer);
         if (player is null) return;

@@ -10,6 +10,11 @@ void DrawAdminTab() {
         UI::EndTabItem();
     }
 
+    if (UI::BeginTabItem("Skins")) {
+        DrawAdminTabSkins();
+        UI::EndTabItem();
+    }
+
     if (UI::BeginTabItem("Players")) {
         DrawAdminTabPlayers();
         UI::EndTabItem();
@@ -45,9 +50,42 @@ void DrawAdminTabActions() {
     UI::EndChild();
 }
 
+
+void DrawAdminTabSkins() {
+    UI::AlignTextToFramePadding();
+    UI::Text("Skins");
+    if (UI::BeginChild("admin-skins", vec2(), false, UI::WindowFlags::AlwaysVerticalScrollbar)) {
+        auto @log = g_MTConn.setSkinLog;
+        UI::ListClipper clip(log.Length);
+
+        if (UI::BeginTable("adm-skin-table", 6, UI::TableFlags::SizingStretchSame)) {
+            UI::TableSetupColumn("#", UI::TableColumnFlags::WidthFixed, 50);
+            UI::TableSetupColumn("Player", UI::TableColumnFlags::WidthStretch);
+            UI::TableSetupColumn("Type", UI::TableColumnFlags::WidthFixed, 100);
+            UI::TableSetupColumn("FG Skin", UI::TableColumnFlags::WidthStretch);
+            UI::TableSetupColumn("BG Skin", UI::TableColumnFlags::WidthStretch);
+            UI::TableSetupColumn("View", UI::TableColumnFlags::WidthFixed, 100);
+            UI::TableHeadersRow();
+
+            while (clip.Step()) {
+                for (int i = clip.DisplayStart; i < clip.DisplayEnd; i++) {
+                    UI::PushID('adm-skn' + i);
+                    log[i].DrawAdminTableRow(i);
+                    UI::PopID();
+                }
+            }
+
+            UI::EndTable();
+        }
+    }
+    UI::EndChild();
+}
+
+
 void DrawAdminTabPlayers() {
     UI::AlignTextToFramePadding();
     UI::Text("Player List");
+    UI::Text("\\$f80Todo");
 }
 
 uint m_newRoomActionLimit = 100;

@@ -587,13 +587,17 @@ void OnPressUndoInEditor() {
         // allow the undo
         log_debug("Allowing undo since we have not recieved more updated action.");
         editor.PluginMapType.Undo();
-        myUpdateStack.RemoveLast();
+        if (myUpdateStack.Length > 0) {
+            myUpdateStack.RemoveLast();
+        }
     } else if (currAutosaveIx == cacheAutosavedIx && AreMacroblockSpecsEq(lastLocalPlaceMb, lastAppliedPlaceMb)) {
         log_debug("Allowing undo since our last placed MB was the last applied");
         editor.PluginMapType.Undo();
         Editor::Editor_CachePosInUndoStack(editor);
         @lastLocalPlaceMb = null;
-        myUpdateStack.RemoveLast();
+        if (myUpdateStack.Length > 0) {
+            myUpdateStack.RemoveLast();
+        }
     } else if (myUpdateStack.Length > 0) {
         log_debug("Doing virtual undo based on recorded actions.");
         auto lastUpdate = myUpdateStack[myUpdateStack.Length - 1];

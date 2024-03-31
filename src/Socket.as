@@ -46,6 +46,7 @@ class MapTogetherConnection {
     Editor::MacroblockSpec@ firstMB;
     bool logAllUpdates = false;
     MTUpdateUndoable@[] updateLog;
+    MTSetSkinUpdate@[] setSkinLog;
 
     uint totalBlocksPlaced;
     uint totalBlocksRemoved;
@@ -330,7 +331,6 @@ class MapTogetherConnection {
 
     void WriteSetSkins(const Editor::SetSkinSpec@[]@ skins) {
         if (socket is null) return;
-        if (socket is null) return;
         if (skins is null) return;
         if (skins.Length == 0) return;
         MemoryBuffer@ buf;
@@ -433,14 +433,16 @@ class MapTogetherConnection {
                 ) {
                     next.Apply(null);
                 } else if (next.ty == MTUpdateTy::SetSkin) {
-                    // do nothing => drop set skin messages
+                    auto skin = cast<MTSetSkinUpdate>(next);
+                    setSkinLog.InsertLast(skin);
+                    pendingUpdates.InsertLast(next);
                 } else {
                     pendingUpdates.InsertLast(next);
-                    msgsRead++;
                 }
                 if (logAllUpdates && next.isUndoable) {
                     updateLog.InsertLast(cast<MTUpdateUndoable>(next));
                 }
+                msgsRead++;
                 RecordUserStats(next);
             } else {
                 if (socket is null) {
@@ -873,7 +875,6 @@ MTUpdate@ BufToMTUpdate(MTUpdateTy ty, MemoryBuffer@ buf) {
             return PlayerJoinUpdate(buf);
         case MTUpdateTy::PlayerLeave:
             return PlayerLeaveUpdate(buf);
-            // NotifyWarning("Unimplemented: PlayerLeaveUpdateFromBuf");
             // return null;
         case MTUpdateTy::Admin_PromoteMod:
             //return PromoteModUpdateFromBuf(buf);
@@ -924,10 +925,6 @@ MTUpdate@ DeleteUpdateFromBuf(MemoryBuffer@ buf) {
 
 MTUpdate@ SetSkinUpdateFromBuf(MemoryBuffer@ buf) {
     return MTSetSkinUpdate(Editor::SetSkinSpecFromBuf(buf));
-}
-
-MTUpdate@ PlayerLeaveUpdateFromBuf(MemoryBuffer@ buf) {
-    return null;
 }
 
 MemoryBuffer@ g_TmpMemBufForSockRead = MemoryBuffer(0);
@@ -997,8 +994,8 @@ const string ReadLPString(Net::Socket@ socket) {
         // these are b"ER" as a LE u16, this is our limit so we can catch ERR msgs.
         auto x = socket.ReadUint8();
         if (x == 0x52 /* R */) {
-            auto len = socket.ReadUint16();
-            NotifyError("Server Error!: " + socket.ReadRaw(len));
+            auto str_len = socket.ReadUint16();
+            NotifyError("Server Error!: " + socket.ReadRaw(str_len));
         } else {
             return "\x52" + socket.ReadRaw(len - 1);
         }

@@ -49,7 +49,7 @@ void RenderST_Other() {
 
 
 [Setting hidden]
-bool S_EnableSettingSkins = true;
+bool S_EnableSettingSkins = false;
 
 
 

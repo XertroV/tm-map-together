@@ -161,6 +161,7 @@ void DrawRoomCreateForm() {
     DrawCreateRoomForm_SetAll();
     if (UI::Button("Create Room")) {
         startnew(ConnectToMapTogether_FreshMap);
+        SetLoadingScreenText("Creating Map Together room...");
     }
 }
 
@@ -191,6 +192,7 @@ void DrawRoomJoinForm(bool allowLoadExisting = false) {
     UI::BeginDisabled(m_RoomId.Length != 6);
     if (UI::Button("Join Room")) {
         startnew(JoinMapTogetherRoom);
+        SetLoadingScreenText("Joining Map Together Room: " + m_RoomId);
     }
     UI::EndDisabled();
 }

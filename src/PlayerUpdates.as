@@ -201,7 +201,41 @@ class MTSetSkinUpdate : MTUpdate {
         if (!Editor::SetSkins({skin})) {
             NotifyError("Failed to set skin");
         }
-        return false;
+        return true;
+    }
+
+    void DrawAdminRow(uint i) override {
+
+    }
+
+    string GetSkinType() {
+        if (skin.block !is null) return "Block";
+        if (skin.item !is null) return "Item";
+        return "Unknown";
+    }
+
+    void DrawAdminTableRow(uint i) {
+        UI::TableNextRow();
+        UI::TableNextColumn();
+        UI::Text(tostring(i + 1) + ".");
+        UI::TableNextColumn();
+        UI::Text(meta.playerName);
+        UI::TableNextColumn();
+        UI::Text(GetSkinType());
+        UI::TableNextColumn();
+        UI::Text(skin.fgSkin);
+        UI::TableNextColumn();
+        UI::Text(skin.bgSkin);
+        UI::TableNextColumn();
+        if (UI::Button(Icons::Eye + "##adm-skinview-" + i)) {
+            vec3 pos;
+            if (skin.block !is null) {
+                pos = skin.block.pos;
+            } else if (skin.item !is null) {
+                pos = skin.item.pos;
+            }
+            Editor::SetCamAnimationGoTo(Editor::DirToLookUvFromCamera(pos), pos, 60);
+        }
     }
 }
 

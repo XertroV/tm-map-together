@@ -104,7 +104,7 @@ class ChatMsgEvent : MTGameEvent {
             col = cGreen;
         }
         this.msg = FormatTimestampMsShort(cmsg.timestamp) + " [ " + cmsg.player.nameAndTitle + " ]: " + (
-            cmsg.message.Length > S_ChatMsgLenLimit ? cmsg.message.SubStr(0, S_ChatMsgLenLimit) + "…" : cmsg.message
+            uint(cmsg.message.Length) > S_ChatMsgLenLimit ? cmsg.message.SubStr(0, S_ChatMsgLenLimit) + "…" : cmsg.message
         );
     }
 }
