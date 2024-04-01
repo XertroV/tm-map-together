@@ -84,9 +84,9 @@ recent:
 - [x] chat log snap to bottom
 - [x] name custom block abusers
 - [x] fix server lockup and disconnect reconnect
-- [x] chat use server timestamp
-- [x] players in list after leaving bug
-- [x] vehicle marker jelly
+- [x] fix: chat use server timestamp
+- [x] fix: players in list after leaving bug
+- [x] vehicle marker jelly when moving camera
 
 
 - [x] server chat

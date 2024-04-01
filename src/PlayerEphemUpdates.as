@@ -391,7 +391,7 @@ class ChatUpdate : MTUpdate {
         if (p is null) {
             log_warn("ChatUpdate::Apply: Failed to find player for ID/WSID/Name: " + meta.playerMwId.Value + " / " + meta.playerId + " / " + meta.playerName);
         }
-        g_MTConn.serverChat.AddMessage(ChatMessage(p, type, msg, meta !is null ? meta.timestamp : 0));
+        g_MTConn.serverChat.AddMessage(ChatMessage(p, type, msg, meta !is null ? meta.timestamp : uint(GetAccurateTimestampMs())));
         return false;
     }
 }
