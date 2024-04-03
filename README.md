@@ -73,8 +73,10 @@ recent:
 - [ ] colored names
 - [ ] add compression to macroblocks (detect place-deletes, delete-places, repeated skin application, etc)
 - [ ] add ding on chat msg (or one that mentions your name only maybe)
+- [ ] freeblock nudging is BAAAAD
+-
 
-
+v0.1.6
 - [x] fix undo
 - [x] enable skins -- can be disabled in settings under optional features
 - [x] add one frame delay after leaving test mode
@@ -89,6 +91,7 @@ recent:
 - [x] vehicle marker jelly when moving camera
 
 
+.0.1.5x
 - [x] server chat
 - [x] server: map size, base/mood, car, rules_flags,
 - [x] create map base

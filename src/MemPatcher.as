@@ -16,7 +16,7 @@ class MemPatcher {
         ptr = Dev::FindPattern(pattern);
         applied = false;
         if (ptr == 0) {
-            NotifyError("MemPatcher: Pattern not found: " + pattern);
+            NotifyError("MemPatcher: Pattern not found: " + pattern, false);
         } else {
             trace('Found: ' + pattern + ' at ' + Text::FormatPointer(ptr));
         }

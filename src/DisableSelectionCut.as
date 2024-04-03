@@ -1,7 +1,7 @@
-MemPatcher@ Patch_DisableCutSelection = MemPatcher(
-    "12",
-    {}, {}
-);
+// MemPatcher@ Patch_DisableCutSelection = MemPatcher(
+//     "12",
+//     {}, {}
+// );
 
 
 /*

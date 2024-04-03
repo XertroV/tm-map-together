@@ -54,18 +54,20 @@ Trackmania.exe.text+DD76D2 - 48 8B 74 24 40        - mov rsi,[rsp+40]
 Trackmania.exe.text+DD76D7 - 48 83 C4 20           - add rsp,20 { 32 }
 
 
+April Update; game version 2024_03_19
+- only change is in function offsets
 
 
 */
 
 
 MemPatcher@ Patch_PreventUserUndo = MemPatcher(
-    "FF 90 48 02 00 00 E9 FF 01 00 00 49 8B CE E8 72 F8 2E FF 85 C0 0F 84 EF 01 00 00 41 8B 46 1C 24 05 41 3A C5 75 1A 48 8B 4F 68 BA 6A 00 00 00",
+    "FF 90 48 02 00 00 E9 FF 01 00 00 49 8B CE E8 ?? ?? ?? ?? 85 C0 0F 84 EF 01 00 00 41 8B 46 1C", // 24 05 41 3A C5 75 1A 48 8B 4F 68 BA 6A 00 00 00",
     {0}, {"90 90 90 90 90 90"}, {"FF 90 48 02 00 00"}
 );
 
 MemPatcher@ Patch_PreventUserRedo = MemPatcher(
-    "FF 90 48 02 00 00 E9 A2 01 00 00 49 8B CE E8 15 F8 2E FF 85 C0 0F 84 92 01 00 00 48 8B 07 48 8B CF FF 90 50 01 00 00 41 3B C5 0F 85 7D 01 00 00 48 8B 8F E0 00 00 00 48 85 C9 0F 84 6D 01 00 00 E8 C3 C5 CB FF",
+    "FF 90 48 02 00 00 E9 A2 01 00 00 49 8B CE E8 ?? ?? ?? ?? 85 C0 0F 84 92 01 00 00 48 8B 07", //  48 8B CF FF 90 50 01 00 00 41 3B C5 0F 85 7D 01 00 00 48 8B 8F E0 00 00 00 48 85 C9 0F 84 6D 01 00 00 E8 C3 C5 CB FF",
     {0}, {"90 90 90 90 90 90"}, {"FF 90 48 02 00 00"}
 );
 

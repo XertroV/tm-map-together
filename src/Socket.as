@@ -626,7 +626,7 @@ class MapTogetherConnection {
                         Patch_DisableSweeps.Apply();
                     }
                     if (rulesFlags & RulesFlags::AllowSelectionCut == 0) {
-                        Patch_DisableCutSelection.Apply();
+                        // Patch_DisableCutSelection.Apply();
                     }
                 }
             }
