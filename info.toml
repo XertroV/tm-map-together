@@ -12,5 +12,5 @@ dependencies = ["VehicleState", "Camera"]
 exports = ["Export_Imports.as"]
 shared_exports = ["Export_Shared.as"]
 
-timeout = 20000
+timeout = 30000
 module = "MapTogether"

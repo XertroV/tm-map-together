@@ -51,6 +51,9 @@ void RenderST_Other() {
 [Setting hidden]
 bool S_EnableSettingSkins = false;
 
+[Setting hidden]
+bool S_PrintItemPlacingDebug = false;
+
 
 
 
@@ -109,6 +112,10 @@ void DrawSettingsGameUiTab() {
     }
     S_PassthroughAllLogs = UI::Checkbox("Pass Through All Logs", S_PassthroughAllLogs);
     AddSimpleTooltip("This will print all log messages to the openplanet log (this is much more useful when you might need the log later). Only applies to TRACE and DEBUG messages since the others are passed through automatically.");
+
+#if DEV
+    S_PrintItemPlacingDebug = UI::Checkbox("Log Item Placing Debug", S_PrintItemPlacingDebug);
+#endif
 
     UI::Separator();
     UI::AlignTextToFramePadding();

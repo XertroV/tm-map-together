@@ -11,6 +11,7 @@ void ResetOnLeaveEditor() {
 }
 
 void ResetOnEnterEditor() {
+    Editor::desyncCheckNonce = 0;
     myUpdateStack.RemoveRange(0, myUpdateStack.Length);
     cacheAutosavedIx = GetAutosaveStackPos(GetAutosaveStructPtr(GetApp()));
     // Main loop works. Main is 50/50
@@ -26,7 +27,7 @@ namespace Editor {
     void CheckForFreeblockDel() {
         auto app = GetApp();
         CGameCtnEditorFree@ editor;
-        while (true) {
+        while (g_MTConn !is null && g_MTConn.IsConnected) {
             @editor = cast<CGameCtnEditorFree>(GetApp().Editor);
             if (editor is null && app.Editor is null) break;
             if (app.CurrentPlayground !is null || cast<CGameCtnEditorFree>(app.Editor) is null || app.LoadProgress.State != NGameLoadProgress::EState::Disabled) {
@@ -174,6 +175,17 @@ namespace Editor {
             if (placeMb !is null) {
                 log_trace("sending placed " + placeMb.Blocks.Length + " / " + placeMb.Items.Length);
                 g_MTConn.WritePlaced(placeMb);
+                for (uint i = 0; i < placeMb.Items.Length; i++) {
+                    auto item = placeMb.Items[i];
+                    // set all items flying and block coord before sending
+                    // this solves some problems placing them on free blocks
+                    item.isFlying = 1;
+                    item.coord = PosToCoord(item.pos);
+
+                    if (S_PrintItemPlacingDebug) {
+                        PrintItemSpecDebug(item);
+                    }
+                }
                 if (!m_ShouldIgnoreNextAction) {
                     myUpdateStack.InsertLast(MTPlaceUpdate(placeMb));
                 }
@@ -256,6 +268,8 @@ namespace Editor {
                 pmt.NextMbAdditionalPhaseOffset = CGameEditorPluginMap::EPhaseOffset::None;
                 pmt.ForceMacroblockColor = false;
 
+                auto editMode = pmt.EditMode;
+
                 log_trace("applying updates: " + nbPendingUpdates);
                 Editor_UndoToLastCached(editor);
 
@@ -283,7 +297,14 @@ namespace Editor {
                 }
                 g_MTConn.pendingUpdates.RemoveRange(0, nbPendingUpdates);
 
-                autosave = CheckForDesyncObjects() || autosave;
+                if (g_MTConn.pendingUpdates.Length == 0) {
+                    // only check for desync after we're done processing everything
+                    if (desyncCheckNonce % 10 == 0) {
+                        autosave = CheckForDesyncObjects() || autosave;
+                        log_trace("checked for desync objects");
+                    }
+                    desyncCheckNonce++;
+                }
 
                 // uint newPlacedTotal = placedB.Length + placedI.Length;
                 // uint newDelTotal = delB.Length + delI.Length;
@@ -302,6 +323,8 @@ namespace Editor {
                 pmt.NextItemPhaseOffset = _NextPhaseOffset;
                 pmt.NextMbAdditionalPhaseOffset = _NextMbOffset;
                 pmt.ForceMacroblockColor = _NextMbColor;
+                pmt.EditMode = editMode;
+                log_debug("restored edit mode: " + tostring(pmt.EditMode));
             }
             yield();
         }
@@ -317,26 +340,89 @@ namespace Editor {
         Patch_DisableSweeps.Unapply();
     }
 
+    uint desyncCheckNonce = 0;
+
     // return true to autosave; if desync objects were found and fixed
     bool CheckForDesyncObjects() {
         if (g_MTConn is null) return false;
         if (g_MTConn.pendingUpdates.Length > 0) return false;
         auto extra = Editor::SubtractTreeFromMapCache(g_MTConn.mapTree);
-        if (extra is null) return false;
-        log_warn("Desync objects found: " + extra.Length);
-        for (uint i = 0; i < extra.Blocks.Length; i++) {
-            log_warn("Extra block: " + extra.Blocks[i].name + " at " + extra.Blocks[i].pos.ToString());
-        }
-        for (uint i = 0; i < extra.Items.Length; i++) {
-            log_warn("Extra item: " + extra.Items[i].name + " at " + extra.Items[i].pos.ToString());
+        if (extra !is null) {
+            log_warn("Desync objects found: " + extra.Length);
+            // for (uint i = 0; i < extra.Blocks.Length; i++) {
+            //     log_warn("Extra block: " + extra.Blocks[i].name + " at " + extra.Blocks[i].pos.ToString());
+            // }
+            // for (uint i = 0; i < extra.Items.Length; i++) {
+            //     log_warn("Extra item: " + extra.Items[i].name + " at " + extra.Items[i].pos.ToString());
+            // }
         }
         auto missing = g_MTConn.mapTree.Subtract(Editor::GetCachedMapOctTree());
         log_warn("Missing objects found: " + missing.Length);
         for (uint i = 0; i < missing.Length; i++) {
-            log_warn("Missing block: " + missing[i].ToString() + " at " + missing[i].point.ToString());
+            log_warn("Missing: " + missing[i].ToString() + " at " + missing[i].point.ToString());
+            if (missing[i].item !is null) {
+                auto item = missing[i].item;
+                item.isFlying = 1;
+                item.coord = PosToCoord(item.pos);
+                // trace('name: ' + item.name);
+                // trace('collection: ' + item.collection);
+                // trace('author: ' + item.author);
+                // trace('coord: ' + item.coord.ToString());
+                // trace('dir: ' + item.dir);
+                // trace('pos: ' + item.pos.ToString());
+                // trace('pyr: ' + item.pyr.ToString());
+                // trace('scale: ' + item.scale);
+                // trace('color: ' + item.color);
+                // trace('lmQual: ' + item.lmQual);
+                // trace('phase: ' + item.phase);
+                // trace('pivotPos: ' + item.pivotPos.ToString());
+                // trace('isFlying: ' + item.isFlying);
+                // trace('variantIx: ' + item.variantIx);
+            }
         }
-        return false;
+        bool gotExtra = extra !is null && extra.Length > 0;
+        bool gotMissing = missing.Length > 0;
+
+        if (gotExtra && gotMissing) {
+            // auto e1b = extra.Blocks.Length > 0 ? extra.Blocks[0] : null;
+            // auto e1i = extra.Items.Length > 0 ? extra.Items[0] : null;
+            // auto m1 = missing[0];
+            // auto m1b = m1.block;
+            // auto m1i = m1.item;
+            // if (e1b !is null && m1b !is null) {
+            //     log_warn("Desync: extra block: " + e1b.name + " at " + e1b.pos.ToString() + ", missing block: " + m1b.name + " at " + m1b.pos.ToString());
+            //     log_trace('eq: ' + (e1b == m1b));
+            // } else if (e1i !is null && m1i !is null) {
+            //     log_warn("Desync: extra item: " + e1i.name + " at " + e1i.pos.ToString() + ", missing item: " + m1i.name + " at " + m1i.pos.ToString());
+            //     log_trace('eq: ' + (e1i == m1i));
+            // }
+            // for (uint i = 0; i < extra.Items.Length; i++) {
+            //     for (uint j = 0; j < missing.Length; j++) {
+            //         if (missing[j].item is null) continue;
+            //         if (extra.Items[i].name == missing[j].item.name && MathX::Vec3Eq(extra.Items[i].pos, missing[j].item.pos)) {
+            //             log_warn("Desync: extra item: " + extra.Items[i].name + " at " + extra.Items[i].pos.ToString() + ", missing item: " + missing[j].item.name + " at " + missing[j].item.pos.ToString());
+            //             log_debug("Eq: " + (extra.Items[i] == missing[j].item));
+            //             if (S_PrintItemPlacingDebug) {
+            //                 PrintItemSpecDebug(extra.Items[i]);
+            //                 PrintItemSpecDebug(missing[j].item);
+            //             }
+            //         }
+            //     }
+            // }
+        }
+        bool shouldAutosave = gotExtra || gotMissing;
+        if (gotExtra) {
+            Editor::DeleteMacroblock(extra, false);
+            log_trace("Deleted extra objects: " + extra.Length);
+        }
+        if (gotMissing) {
+            Editor::PlaceMacroblock(missing.PopulateMacroblock(Editor::MakeMacroblockSpec()), false);
+            log_trace("Placed missing objects: " + missing.Length);
+        }
+        return shouldAutosave;
     }
+
+    dictionary missingBlocksAndItems;
 
     void CheckUpdateForMissingBlocksItems(MTUpdate@ update) {
         if (!update.isUndoable) return;
@@ -345,6 +431,21 @@ namespace Editor {
             for (uint i = 0; i < place.mb.Blocks.Length; i++) {
                 if (place.mb.Blocks[i].BlockInfo is null) {
                     g_MTConn.statusMsgs.AddGameEvent(UserPlacedMissingBlockItemEvent(update.meta.GetPlayer(), place.mb.Blocks[i].name));
+                    if (!missingBlocksAndItems.Exists(place.mb.Blocks[i].name)) {
+                        missingBlocksAndItems[place.mb.Blocks[i].name] = true;
+                    }
+                    // remove to avoid desync trigger
+                    g_MTConn.mapTree.Remove(place.mb.Blocks[i]);
+                }
+            }
+            for (uint i = 0; i < place.mb.Items.Length; i++) {
+                if (place.mb.Items[i].Model is null) {
+                    g_MTConn.statusMsgs.AddGameEvent(UserPlacedMissingBlockItemEvent(update.meta.GetPlayer(), place.mb.Items[i].name));
+                    if (!missingBlocksAndItems.Exists(place.mb.Items[i].name)) {
+                        missingBlocksAndItems[place.mb.Items[i].name] = true;
+                    }
+                    // remove to avoid desync trigger
+                    g_MTConn.mapTree.Remove(place.mb.Items[i]);
                 }
             }
             return;
@@ -413,6 +514,24 @@ namespace Editor {
     }
 }
 
+
+void PrintItemSpecDebug(Editor::ItemSpec@ item) {
+    log_info('item placing:');
+    log_trace('name: ' + item.name);
+    log_trace('collection: ' + item.collection);
+    log_trace('author: ' + item.author);
+    log_trace('coord: ' + item.coord.ToString());
+    log_trace('dir: ' + item.dir);
+    log_trace('pos: ' + item.pos.ToString());
+    log_trace('pyr: ' + item.pyr.ToString());
+    log_trace('scale: ' + item.scale);
+    log_trace('color: ' + item.color);
+    log_trace('lmQual: ' + item.lmQual);
+    log_trace('phase: ' + item.phase);
+    log_trace('pivotPos: ' + item.pivotPos.ToString());
+    log_trace('isFlying: ' + item.isFlying);
+    log_trace('variantIx: ' + item.variantIx);
+}
 
 
 void UndoRestrictionPatches() {
