@@ -165,7 +165,7 @@ void UnlockEditorCamera() {
 }
 
 void Render() {
-    if (g_MTConn !is null) {
+    if (g_MTConn !is null && g_MTConn.IsConnected) {
         g_MTConn.RenderPlayersNvg();
         g_MTConn.RenderStatusHUD();
         if (g_OpenCentralChatWindow) {
