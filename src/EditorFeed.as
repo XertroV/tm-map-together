@@ -174,7 +174,6 @@ namespace Editor {
 
             if (placeMb !is null) {
                 log_trace("sending placed " + placeMb.Blocks.Length + " / " + placeMb.Items.Length);
-                g_MTConn.WritePlaced(placeMb);
                 for (uint i = 0; i < placeMb.Items.Length; i++) {
                     auto item = placeMb.Items[i];
                     // set all items flying and block coord before sending
@@ -186,6 +185,7 @@ namespace Editor {
                         PrintItemSpecDebug(item);
                     }
                 }
+                g_MTConn.WritePlaced(placeMb);
                 if (!m_ShouldIgnoreNextAction) {
                     myUpdateStack.InsertLast(MTPlaceUpdate(placeMb));
                 }
