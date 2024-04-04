@@ -1,7 +1,7 @@
 
 float BaseFontHeight {
     get {
-        return S_PlayerLabelHeight * refScale * 1.2;
+        return S_PlayerLabelHeight * refScale * 2.0;
     }
 }
 

@@ -67,7 +67,7 @@ recent:
 - [ ] change room player limit
 - [ ] remove custom item from cursor
 - [ ] on-grid free block only
-- [ ] auto-duplicate detection
+- [x] auto-duplicate detection
 - [ ] compress macroblocks
 - [ ] map partitioning idea for testing without interference
 - [ ] save mapper metadata in track
@@ -76,7 +76,8 @@ recent:
 - [ ] add compression to macroblocks (detect place-deletes, delete-places, repeated skin application, etc)
 - [ ] add ding on chat msg (or one that mentions your name only maybe)
 - [ ] freeblock nudging is BAAAAD
--
+- [x] fix some item placement on freeblocks
+- [x] fix holding down x and not having things be changed on you
 
 v0.1.6
 - [x] fix undo
