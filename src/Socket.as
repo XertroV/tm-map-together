@@ -447,7 +447,7 @@ class MapTogetherConnection {
                     auto place = cast<MTPlaceUpdate>(next);
                     auto del = cast<MTDeleteUpdate>(next);
                     if (place !is null) {
-                        mapTree.AddFromMacroblock(place.mb);
+                        mapTree.AddFromMacroblockUnique(place.mb);
                     } else if (del !is null) {
                         mapTree.RemoveInMacroblock(del.mb);
                     }
