@@ -104,7 +104,7 @@ class ServerChat {
         UI::SetNextItemWidth(200);
         m_chatMsg = UI::InputText("##m-chat-msg", m_chatMsg, changed, UI::InputTextFlags::EnterReturnsTrue);
         bool chatFieldFocused = UI::IsItemFocused();
-        if (changed && IsShiftDown()) {
+        if (changed && Editor::IsShiftDown()) {
             UI::SetKeyboardFocusHere(-1);
         } else if (changed) {
             g_OpenCentralChatWindow = false;

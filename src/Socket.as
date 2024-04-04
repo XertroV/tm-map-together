@@ -47,6 +47,7 @@ class MapTogetherConnection {
     bool logAllUpdates = false;
     MTUpdateUndoable@[] updateLog;
     MTSetSkinUpdate@[] setSkinLog;
+    OctTreeNode@ mapTree;
 
     uint totalBlocksPlaced;
     uint totalBlocksRemoved;
@@ -193,7 +194,7 @@ class MapTogetherConnection {
             return;
         }
         log_trace('Expecting room details, avail: ' + socket.Available());
-        log_trace('socket can read: ' + socket.CanRead());
+        log_trace('socket can read: ' + socket.CanRead() + ' waiting for CanRead + available');
         while (!socket.CanRead() && socket.Available() < 2) yield();
         log_trace('Got enough bytes to read len. avail: ' + socket.Available());
         roomId = ReadLPString(socket);
@@ -208,6 +209,7 @@ class MapTogetherConnection {
         mapSize.x = socket.ReadUint8();
         mapSize.y = socket.ReadUint8();
         mapSize.z = socket.ReadUint8();
+        @mapTree = OctTreeNode(mapSize);
         log_info("Read map size: " + mapSize.ToString());
         mapBase = socket.ReadUint8();
         log_info("Read map base: " + mapBase);
@@ -224,7 +226,7 @@ class MapTogetherConnection {
     }
 
     bool ExpectOKResp() {
-        log_trace('Expecting OK response');
+        log_trace('Expecting OK response; waiting for CanRead and available');
         while (!socket.CanRead() && socket.Available() < 3) yield();
         log_trace('Got enough bytes to read, avail: ' + socket.Available());
         auto resp = socket.ReadRaw(3);
@@ -253,6 +255,7 @@ class MapTogetherConnection {
             CloseWithErr("Failed to connect to MapTogether server");
             return;
         }
+        log_trace('waiting for timeout, write and read');
         while (Time::Now < timeoutAt && !socket.CanWrite() && !socket.CanRead()) {
             yield();
         }
@@ -439,8 +442,18 @@ class MapTogetherConnection {
                 } else {
                     pendingUpdates.InsertLast(next);
                 }
-                if (logAllUpdates && next.isUndoable) {
-                    updateLog.InsertLast(cast<MTUpdateUndoable>(next));
+                if (next.isUndoable) {
+                    // add to mapTree
+                    auto place = cast<MTPlaceUpdate>(next);
+                    auto del = cast<MTDeleteUpdate>(next);
+                    if (place !is null) {
+                        mapTree.AddFromMacroblock(place.mb);
+                    } else if (del !is null) {
+                        mapTree.RemoveInMacroblock(del.mb);
+                    }
+                    if (logAllUpdates) {
+                        updateLog.InsertLast(cast<MTUpdateUndoable>(next));
+                    }
                 }
                 msgsRead++;
                 RecordUserStats(next);
@@ -1187,7 +1200,7 @@ class PlayerInRoom {
             mat4 translation = mat4::Translate(camPos);
             mat4 camMat = mat4(lastCamCursor.cam_matrix);
             auto camRot = mat4::Inverse(mat4::Inverse(translation) * camMat);
-            auto pyr = PitchYawRollFromRotationMatrix(camRot);
+            auto pyr = Editor::PitchYawRollFromRotationMatrix(camRot);
             Editor::SetCamAnimationGoTo(vec2(pyr.y, pyr.x), targetPos, targetDist);
             // log_trace('set editor cam anim');
         } else {

@@ -145,7 +145,7 @@ class PlayerCamCursor : MTUpdate, HasPlayerLabelDraw {
         bool shouldUseCoord = isPicking || isErasing || isSelecting || isSkinning;
         if (!S_PlayerTagsAsCameraTargetOnly && (isPlacing || shouldUseCoord)) {
             if (isPlacingCoord || shouldUseCoord) {
-                drawAtWorldPos = CoordToPos(this.coord) + vec3(16, 4, 16);
+                drawAtWorldPos = Editor::CoordToPos(this.coord) + vec3(16, 4, 16);
             } else if (isPlacingFree || isTesting) {
                 drawAtWorldPos = this.pos;
             }

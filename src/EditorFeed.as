@@ -283,6 +283,8 @@ namespace Editor {
                 }
                 g_MTConn.pendingUpdates.RemoveRange(0, nbPendingUpdates);
 
+                autosave = CheckForDesyncObjects() || autosave;
+
                 // uint newPlacedTotal = placedB.Length + placedI.Length;
                 // uint newDelTotal = delB.Length + delI.Length;
                 // if (origPlacedTotal != newPlacedTotal || origDelTotal != newDelTotal) {
@@ -313,6 +315,27 @@ namespace Editor {
         UserUndoRedoDisablePatchEnabled = false;
         CleanupEditorIntercepts();
         Patch_DisableSweeps.Unapply();
+    }
+
+    // return true to autosave; if desync objects were found and fixed
+    bool CheckForDesyncObjects() {
+        if (g_MTConn is null) return false;
+        if (g_MTConn.pendingUpdates.Length > 0) return false;
+        auto extra = Editor::SubtractTreeFromMapCache(g_MTConn.mapTree);
+        if (extra is null) return false;
+        log_warn("Desync objects found: " + extra.Length);
+        for (uint i = 0; i < extra.Blocks.Length; i++) {
+            log_warn("Extra block: " + extra.Blocks[i].name + " at " + extra.Blocks[i].pos.ToString());
+        }
+        for (uint i = 0; i < extra.Items.Length; i++) {
+            log_warn("Extra item: " + extra.Items[i].name + " at " + extra.Items[i].pos.ToString());
+        }
+        auto missing = g_MTConn.mapTree.Subtract(Editor::GetCachedMapOctTree());
+        log_warn("Missing objects found: " + missing.Length);
+        for (uint i = 0; i < missing.Length; i++) {
+            log_warn("Missing block: " + missing[i].ToString() + " at " + missing[i].point.ToString());
+        }
+        return false;
     }
 
     void CheckUpdateForMissingBlocksItems(MTUpdate@ update) {

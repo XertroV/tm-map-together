@@ -565,7 +565,7 @@ UI::InputBlocking OnKeyPress(bool down, VirtualKey key) {
             g_OpenCentralChatWindow = false;
             return UI::InputBlocking::Block;
         }
-        if (down && key == VirtualKey::Return && IsShiftDown() && !IsCtrlDown() && !IsAltDown()) {
+        if (down && key == VirtualKey::Return && Editor::IsShiftDown() && !Editor::IsCtrlDown() && !Editor::IsAltDown()) {
             dev_trace("Shift+Enter pressed");
             g_RefocusChat = true;
             g_OpenCentralChatWindow = !g_RenderingChat;
