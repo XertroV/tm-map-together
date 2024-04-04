@@ -299,7 +299,7 @@ namespace Editor {
 
                 if (g_MTConn.pendingUpdates.Length == 0) {
                     // only check for desync after we're done processing everything
-                    if (desyncCheckNonce % 10 == 0) {
+                    if (desyncCheckNonce % S_DesyncCheckPlacePeriod == 0) {
                         autosave = CheckForDesyncObjects() || autosave;
                         log_trace("checked for desync objects");
                     }

@@ -48,6 +48,7 @@ class ChatMessage {
         if (timestamp == 0) {
             timestamp = GetAccurateTimestampMs();
         }
+        this.timestamp = timestamp;
         @this.player = player;
         message = msg;
         ui_msg = "\\$ddd" + FormatTimestampMsShort(timestamp) + "\\$z [ " + player.nameAndTitle + " ]: " + msg;
