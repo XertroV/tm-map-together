@@ -231,6 +231,10 @@ void RenderMainWindow() {
                 DrawSuperAdminUI();
                 UI::EndTabItem();
             }
+            if (UI::BeginTabItem("Desync")) {
+                DrawDesyncTab();
+                UI::EndTabItem();
+            }
         }
         if (UI::BeginTabItem("Settings")) {
             DrawSettingsGameUiTab();
@@ -333,6 +337,8 @@ void DrawMainUI_Inner() {
             UI::Text("Status: " + tostring(g_ConnectionStage));
             if (UI::Button("Reset")) {
                 IS_CONNECTING = false;
+                g_MTConn.Close();
+                @g_MTConn = null;
                 // this crashed the game i think b/c of some race condition nullifying and instantiating
                 // startnew(ExitMTWhenItBecomesAvailable);
             }

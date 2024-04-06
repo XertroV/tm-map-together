@@ -340,13 +340,16 @@ namespace Editor {
         Patch_DisableSweeps.Unapply();
     }
 
+    Editor::MacroblockSpec@ desyncLastExtra;
+    OctTreeNode@ desyncLastMissing;
     uint desyncCheckNonce = 0;
 
     // return true to autosave; if desync objects were found and fixed
-    bool CheckForDesyncObjects() {
+    bool CheckForDesyncObjects(bool apply = true) {
         if (g_MTConn is null) return false;
         if (g_MTConn.pendingUpdates.Length > 0) return false;
         auto extra = Editor::SubtractTreeFromMapCache(g_MTConn.mapTree);
+        @desyncLastExtra = extra;
         if (extra !is null) {
             log_warn("Desync objects found: " + extra.Length);
             // for (uint i = 0; i < extra.Blocks.Length; i++) {
@@ -357,9 +360,10 @@ namespace Editor {
             // }
         }
         auto missing = g_MTConn.mapTree.Subtract(Editor::GetCachedMapOctTree());
+        @desyncLastMissing = missing;
         log_warn("Missing objects found: " + missing.Length);
         for (uint i = 0; i < missing.Length; i++) {
-            log_warn("Missing: " + missing[i].ToString() + " at " + missing[i].point.ToString());
+            // log_warn("Missing: " + missing[i].ToString() + " at " + missing[i].point.ToString());
             if (missing[i].item !is null) {
                 auto item = missing[i].item;
                 item.isFlying = 1;
@@ -411,11 +415,11 @@ namespace Editor {
             // }
         }
         bool shouldAutosave = gotExtra || gotMissing;
-        if (gotExtra) {
+        if (gotExtra && apply) {
             Editor::DeleteMacroblock(extra, false);
             log_trace("Deleted extra objects: " + extra.Length);
         }
-        if (gotMissing) {
+        if (gotMissing && apply) {
             Editor::PlaceMacroblock(missing.PopulateMacroblock(Editor::MakeMacroblockSpec()), false);
             log_trace("Placed missing objects: " + missing.Length);
         }

@@ -111,7 +111,7 @@ class ChatMsgEvent : MTGameEvent {
 
 class UserPlacedMissingBlockItemEvent : MTGameEvent {
     UserPlacedMissingBlockItemEvent(PlayerInRoom@ player, const string &in item) {
-        msg = player.nameAndTitle + " placed " + item;
+        msg = (player is null ? "<??? null ???>" : player.nameAndTitle) + " placed " + item;
         col = vec4(1, .9, .9, 1.);
         bgCol = vec4(.2, 0, 0, 0.9);
         animDuration = 10.0;

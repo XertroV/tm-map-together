@@ -16,11 +16,15 @@ void AuthLoop() {
     // }
 }
 
+bool _IsRequestingAuthToken = false;
 const string CheckTokenUpdate() {
+    while (_IsRequestingAuthToken) yield_why("waiting for auth token");
     if (!HasAuthToken()) {
         try {
+            _IsRequestingAuthToken = true;
             auto task = Auth::GetToken();
-            while (!task.Finished()) yield();
+            while (!task.Finished()) yield_why("waiting for auth token task to finish");
+            _IsRequestingAuthToken = false;
             g_opAuthToken = task.Token();
             lastAuthTime = Time::Now;
             // OnGotNewToken();

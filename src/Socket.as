@@ -49,6 +49,8 @@ class MapTogetherConnection {
     MTSetSkinUpdate@[] setSkinLog;
     OctTreeNode@ mapTree;
 
+    bool expectEditorImmediately;
+
     uint totalBlocksPlaced;
     uint totalBlocksRemoved;
     uint totalItemsPlaced;
@@ -68,6 +70,21 @@ class MapTogetherConnection {
         remote_domain = ServerToEndpoint(m_CurrServer);
         log_info("Creating new room on server: " + remote_domain);
         IS_CONNECTING = true;
+        roomPassword = password;
+        actionRateLimit = roomMsBetweenActions;
+        this.expectEditorImmediately = expectEditorImmediately;
+        mapSize = _mapSize;
+        mapBase = _mapBase;
+        baseCar = _baseCar;
+        rulesFlags = _rulesFlags;
+        itemMaxSize = _itemMaxSize;
+        playerLimit = _roomPlayerLimit;
+        log_info("Creating room with password: " + roomPassword);
+        startnew(CoroutineFunc(this.Init_CreateRoom));
+    }
+
+    void Init_CreateRoom() {
+
         InitSock();
         log_info('Connected to server');
         if (socket is null) {
@@ -78,25 +95,24 @@ class MapTogetherConnection {
         // 1 = create
         log_trace('writing room request type');
         socket.Write(uint8(1));
-        roomPassword = password;
         log_trace('writing room pw');
         WriteLPString(socket, roomPassword);
-        log_trace('writing room action limit: ' + roomMsBetweenActions);
-        socket.Write(roomMsBetweenActions);
-        log_trace('writing room map size: ' + _mapSize.ToString());
-        socket.Write(uint8(_mapSize.x));
-        socket.Write(uint8(_mapSize.y));
-        socket.Write(uint8(_mapSize.z));
-        log_trace('writing room map base: ' + _mapBase);
-        socket.Write(uint8(_mapBase));
-        log_trace('writing room base car: ' + _baseCar);
-        socket.Write(uint8(_baseCar));
-        log_trace('writing room rules flags: ' + _rulesFlags);
-        socket.Write(uint8(_rulesFlags));
-        log_trace('writing room item max size: ' + _itemMaxSize);
-        socket.Write(_itemMaxSize);
-        log_trace('writing player limit (room size): ' + _roomPlayerLimit);
-        socket.Write(_roomPlayerLimit);
+        log_trace('writing room action limit: ' + actionRateLimit);
+        socket.Write(actionRateLimit);
+        log_trace('writing room map size: ' + mapSize.ToString());
+        socket.Write(uint8(mapSize.x));
+        socket.Write(uint8(mapSize.y));
+        socket.Write(uint8(mapSize.z));
+        log_trace('writing room map base: ' + mapBase);
+        socket.Write(uint8(mapBase));
+        log_trace('writing room base car: ' + baseCar);
+        socket.Write(uint8(baseCar));
+        log_trace('writing room rules flags: ' + rulesFlags);
+        socket.Write(uint8(rulesFlags));
+        log_trace('writing room item max size: ' + itemMaxSize);
+        socket.Write(itemMaxSize);
+        log_trace('writing player limit (room size): ' + playerLimit);
+        socket.Write(playerLimit);
 
 
         log_info('Sent create room request');
@@ -111,7 +127,6 @@ class MapTogetherConnection {
         }
 
         g_ConnectionStage = ConnectionStage::OpeningEditor;
-        this.expectEditorImmediately = expectEditorImmediately;
         startnew(CoroutineFunc(this.Connected_WaitingForEditor));
     }
 
@@ -120,6 +135,13 @@ class MapTogetherConnection {
         remote_domain = ServerToEndpoint(m_CurrServer);
         log_info("Joining room on server: " + remote_domain);
         IS_CONNECTING = true;
+        roomPassword = password;
+        this.roomId = roomId;
+        log_info("Joining room with id: " + roomId);
+        startnew(CoroutineFunc(this.Init_JoinRoom));
+    }
+
+    void Init_JoinRoom() {
         InitSock();
         g_ConnectionStage = ConnectionStage::Joining;
         if (socket is null) {
@@ -130,7 +152,6 @@ class MapTogetherConnection {
         log_trace('writing room request type');
         socket.Write(uint8(2));
         WriteLPString(socket, roomId);
-        roomPassword = password;
         WriteLPString(socket, roomPassword);
         ExpectOKResp();
         log_info("Got okay response");
@@ -147,7 +168,6 @@ class MapTogetherConnection {
         startnew(CoroutineFunc(this.Connected_WaitingForEditor));
     }
 
-    bool expectEditorImmediately;
     void Connected_WaitingForEditor() {
         auto editor = cast<CGameCtnEditorFree>(GetApp().Editor);
         if (expectEditorImmediately) {
@@ -195,7 +215,14 @@ class MapTogetherConnection {
         }
         log_trace('Expecting room details, avail: ' + socket.Available());
         log_trace('socket can read: ' + socket.CanRead() + ' waiting for CanRead + available');
-        while (!socket.CanRead() && socket.Available() < 2) yield();
+        uint timeoutAt = Time::Now + 7000;
+        while (!socket.CanRead() && socket.Available() < 2 && Time::Now <= timeoutAt) yield_why("waiting to read room details");
+        if (Time::Now > timeoutAt && socket.Available() < 9) {
+            warn("Timeout connecting.");
+            CloseWithErr("Failed to read room details: timeout");
+            return;
+        }
+
         log_trace('Got enough bytes to read len. avail: ' + socket.Available());
         roomId = ReadLPString(socket);
         log_trace("Read room id: " + roomId);
@@ -226,6 +253,7 @@ class MapTogetherConnection {
     }
 
     bool ExpectOKResp() {
+        if (socket is null) return false;
         log_trace('Expecting OK response; waiting for CanRead and available');
         while (!socket.CanRead() && socket.Available() < 3) yield();
         log_trace('Got enough bytes to read, avail: ' + socket.Available());
@@ -243,11 +271,13 @@ class MapTogetherConnection {
     }
 
     protected void InitSock() {
+        @this.socket = Net::Socket();
+        //
         g_ConnectionStage = ConnectionStage::GettingAuthToken;
         string op_token = GetAuthToken();
         g_ConnectionStage = ConnectionStage::ConnectingToServer;
+        if (socket is null) return;
         // log_trace('token: ' + op_token);
-        @this.socket = Net::Socket();
         uint startTime = Time::Now;
         auto timeoutAt = Time::Now + 7500;
         log_info('Connecting to: ' + remote_domain + ':19796');
@@ -722,9 +752,15 @@ class MapTogetherConnection {
             NotifyError("Netcode issue detected: msg of len > 10MB. Please reload the plugin. Open a fresh map, and rejoin the room.");
             throw('ReadMTUpdateMsg: bad msg length! > 10MB');
         }
-        while (socket.Available() < int(len + meta_bytes)) {
-            log_trace("Waiting for more bytes to read update: " + len + "; available: " + socket.Available() + "; start_avail: " + start_avail + "; ty: " + ty);
+        uint timeoutAt = Time::Now + 15000;
+        while (socket.Available() < int(len + meta_bytes) && Time::Now < timeoutAt) {
+            dev_trace("Waiting for more bytes to read update: " + len + "; available: " + socket.Available() + "; start_avail: " + start_avail + "; ty: " + ty);
             yield_why("ReadMTUpdateMsg_WaitForLengthBytes");
+        }
+        if (Time::Now >= timeoutAt) {
+            NotifyError("Netcode issue detected: timeout reading update. Please reload the plugin. Open a fresh map, and rejoin the room.");
+            CloseWithErr("Failed to read update from server: timeout");
+            return null;
         }
         uint start = Time::Now;
 
@@ -995,7 +1031,7 @@ class MsgMeta {
     }
 
     PlayerInRoom@ GetPlayer() {
-        return g_MTConn.FindPlayerInRoom(playerMwId);
+        return g_MTConn.FindPlayerEver(playerMwId);
     }
 }
 
