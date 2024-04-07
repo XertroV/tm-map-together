@@ -190,6 +190,10 @@ class MapTogetherConnection {
             yield();
         }
 
+        if (!MathX::Nat3Eq(mapSize, GetApp().RootMap.Size)) {
+            NotifyWarning("Map size mismatch: Server: " + mapSize.ToString() + "; Local: " + GetApp().RootMap.Size.ToString());
+        }
+
         trace('starting read updates loop');
         startnew(Editor::EditorFeedGen_Loop);
         startnew(CoroutineFunc(this.ReadUpdatesLoop));
