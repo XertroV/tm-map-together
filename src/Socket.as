@@ -174,15 +174,23 @@ class MapTogetherConnection {
             if (editor is null) {
                 NotifyError("Expected to be in editor already.");
                 while ((@editor = cast<CGameCtnEditorFree>(GetApp().Editor)) is null) yield();
-                while (!editor.PluginMapType.IsEditorReadyForRequest) yield();
+                while (GetApp().Editor !is null && !editor.PluginMapType.IsEditorReadyForRequest) yield();
             }
+            yield();
             this.SendMapAsMacroblock();
         } else {
             if (editor is null) Notify("Waiting to enter editor...");
-            while ((@editor = cast<CGameCtnEditorFree>(GetApp().Editor)) is null) yield();
-            while (!editor.PluginMapType.IsEditorReadyForRequest) yield();
+            trace('cast and check loop:');
+            while (GetApp().Editor is null || (@editor = cast<CGameCtnEditorFree>(GetApp().Editor)) is null) {
+                trace('yield: waiting for editor to be non-null');
+                yield();
+            }
+            trace('editor non-null');
+            while (GetApp().Editor !is null && !editor.PluginMapType.IsEditorReadyForRequest) yield();
+            yield();
         }
 
+        trace('starting read updates loop');
         startnew(Editor::EditorFeedGen_Loop);
         startnew(CoroutineFunc(this.ReadUpdatesLoop));
         IS_CONNECTING = false;
@@ -190,13 +198,15 @@ class MapTogetherConnection {
     }
 
     bool get_IsConnected() {
-        return socket !is null && !hasErrored && roomId.Length == 6;
+        return socket !is null && !hasErrored && roomId.Length == 6
+            && int(g_ConnectionStage) >= int(ConnectionStage::OpeningEditor);
     }
     bool get_IsConnecting() {
-        return socket !is null && !hasErrored && roomId.Length == 0;
+        return socket !is null && ((!hasErrored && roomId.Length == 0)
+                || int(g_ConnectionStage) < int(ConnectionStage::OpeningEditor));
     }
     bool get_IsShutdown() {
-        return socket is null || hasErrored;
+        return g_ConnectionStage != ConnectionStage::None && (socket is null || hasErrored);
     }
     float get_ActionLimitHz() {
         return ActionLimitToHz(actionRateLimit);
@@ -316,6 +326,7 @@ class MapTogetherConnection {
         if (socket is null) return;
         hasErrored = true;
         error = err;
+        NotifyWarning("Closing socket with error: " + err);
         socket.Close();
         @socket = null;
     }
@@ -1262,7 +1273,7 @@ class PlayerInRoom {
         while (lockingEditorCamera) {
             @g_CamLockedToPlayer = this;
             FocusEditorCamera();
-            log_trace('locking editor cam');
+            // log_trace('locking editor cam');
             yield();
         }
         log_trace('break loop locking editor cam');

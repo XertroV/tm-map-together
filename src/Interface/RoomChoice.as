@@ -207,7 +207,22 @@ void OnJoinRoom_EditorOpenNewMap() {
     while (g_MTConn !is null && g_MTConn.roomId.Length == 0) {
         yield();
     }
+    trace("g_MTConn null: " + (g_MTConn is null));
+    yield();
+    if (g_MTConn !is null) {
+        trace("g_MTConn.IsConnected: " + g_MTConn.IsConnected);
+        trace("g_MTConn.IsConnecting: " + g_MTConn.IsConnecting);
+        trace("g_MTConn.IsShutdown: " + g_MTConn.IsShutdown);
+        trace("g_MTConn.hasErrored: " + g_MTConn.hasErrored);
+        trace("g_MTConn.error: " + g_MTConn.error);
+        // trace("g_MTConn.socket is null: " + (g_MTConn.socket is null));
+    }
+    while (g_MTConn !is null && g_MTConn.IsConnecting) yield_why("waiting for connection to establish");
     if (g_MTConn !is null && g_MTConn.IsConnected) {
+        while (g_MTConn.mapSize.x == 0) {
+            yield_why("waiting for room details");
+        }
+        trace('mapSize: ' + g_MTConn.mapSize.ToString() + ', mapBase: ' + tostring(g_MTConn.mapBase) + ', baseCar: ' + tostring(g_MTConn.baseCar));
         auto size = g_MTConn.mapSize;
         // todo: support more map bases; bit flags (high) after
         auto base = g_MTConn.mapBase >= 32 ? MapBase(g_MTConn.mapBase & 0b11100000) : MapBase::Stadium155;
