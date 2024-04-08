@@ -297,7 +297,7 @@ namespace Editor {
                 }
                 g_MTConn.pendingUpdates.RemoveRange(0, nbPendingUpdates);
 
-                if (g_MTConn.pendingUpdates.Length == 0) {
+                if (g_MTConn.pendingUpdates.Length == 0 && S_DoDesyncCheckAutomatically) {
                     // only check for desync after we're done processing everything
                     if (desyncCheckNonce % S_DesyncCheckPlacePeriod == 0) {
                         autosave = CheckForDesyncObjects() || autosave;

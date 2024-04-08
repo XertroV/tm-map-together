@@ -149,6 +149,13 @@ class MTDeleteUpdate : MTUpdateUndoable {
     }
 
     bool Apply(CGameCtnEditorFree@ editor) override {
+        if (mb is null || mb.Blocks is null || mb.Items is null) {
+            log_info("mb null: " + (mb is null));
+            if (mb !is null) {
+                log_info("mb blocks null: " + (mb.Blocks is null));
+                log_info("mb items null: " + (mb.Items is null));
+            }
+        }
         log_info('Applying delete update: ' + mb.Blocks.Length + '; ' + mb.Items.Length);
         bool freeOnly = mb.Items.Length == 0;
         if (freeOnly) {

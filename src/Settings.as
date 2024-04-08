@@ -57,6 +57,8 @@ bool S_PrintItemPlacingDebug = false;
 [Setting hidden]
 uint S_DesyncCheckPlacePeriod = 5;
 
+[Setting hidden]
+bool S_DoDesyncCheckAutomatically = false;
 
 
 
@@ -114,8 +116,11 @@ void DrawSettingsGameUiTab() {
     S_PassthroughAllLogs = UI::Checkbox("Pass Through All Logs", S_PassthroughAllLogs);
     AddSimpleTooltip("This will print all log messages to the openplanet log (this is much more useful when you might need the log later). Only applies to TRACE and DEBUG messages since the others are passed through automatically.");
 
+    S_DoDesyncCheckAutomatically = UI::Checkbox("Do Desync Check Automatically", S_DoDesyncCheckAutomatically);
+    UI::BeginDisabled(!S_DoDesyncCheckAutomatically);
     S_DesyncCheckPlacePeriod = Math::Clamp(UI::SliderInt("Desync Check Place Period", S_DesyncCheckPlacePeriod, 1, 100), 1, 100);
     AddSimpleTooltip("The number of non-trivial placement operations to wait between checking for desyncs. Lower means more checks. If 2 incompatible blocks are placed in normal mode, there will be a cycle where one replaces the other whenever this check happens. To fix, you'll need to manually delete one of the conflicting blocks.");
+    UI::EndDisabled();
 
 #if DEV
     S_PrintItemPlacingDebug = UI::Checkbox("Log Item Placing Debug", S_PrintItemPlacingDebug);
