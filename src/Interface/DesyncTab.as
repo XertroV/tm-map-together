@@ -27,8 +27,12 @@ void DrawDesyncTab() {
     }
     if (UI::Button("Check for Desync (and fix)")) {
         Editor::CheckForDesyncObjects(false);
-        g_MTConn.pendingUpdates.InsertLast(MTDeleteUpdate(Editor::desyncLastExtra));
-        g_MTConn.pendingUpdates.InsertLast(MTPlaceUpdate(Editor::desyncLastMissing.PopulateMacroblock(Editor::MakeMacroblockSpec())));
+        if (Editor::desyncLastExtra !is null) {
+            g_MTConn.pendingUpdates.InsertLast(MTDeleteUpdate(Editor::desyncLastExtra));
+        }
+        if (Editor::desyncLastMissing !is null) {
+            g_MTConn.pendingUpdates.InsertLast(MTPlaceUpdate(Editor::desyncLastMissing.PopulateMacroblock(Editor::MakeMacroblockSpec())));
+        }
         Notify("Updated desync status and inserted updates");
     }
 }

@@ -81,6 +81,7 @@ namespace Editor {
         }
         log_trace('initial autosave now.');
         editor.PluginMapType.AutoSave();
+        Editor_CachePosInUndoStack(editor);
         yield();
 
         const array<BlockSpec@>@ placedB;
