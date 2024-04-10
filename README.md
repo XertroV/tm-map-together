@@ -48,10 +48,14 @@ to test:
 - [ ] performance with 16+ players in a room over time (the 'lag' issue with long frames)
 - [ ] is the server reliably sending msgs?
 
-- [ ] desync detection + custom blocks/items (no loop, or other issues)
+- [x] desync detection + custom blocks/items (no loop, or other issues)
+-
 
 todo:
 recent:
+- [ ]
+- [ ] column/pillar fixes
+- [ ] warn if map height bad
 - [ ] better UI
 - [ ] ping messages every 2s or so
 - [ ] timeout detection
