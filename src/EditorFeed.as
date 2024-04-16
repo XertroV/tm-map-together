@@ -60,7 +60,18 @@ namespace Editor {
 
     bool m_ShouldIgnoreNextAction = false;
 
+    bool feedStart_WasYoloModeEnabled = false;
+    bool feed_hasPlacedSomething = false;
+    uint feed_hasPlacedSomethingTime = 0;
+    bool feed_hasSyncronized = false;
+
     void EditorFeedGen_Loop() {
+        feedStart_WasYoloModeEnabled = S_YoloMode;
+        feed_hasPlacedSomething = false;
+        feed_hasPlacedSomethingTime = 0;
+        feed_hasSyncronized = false;
+        S_YoloMode = false;
+
         ResetOnEnterEditor();
         UserUndoRedoDisablePatchEnabled = true;
         SetupEditorIntercepts();
@@ -287,8 +298,17 @@ namespace Editor {
                         break;
                     }
                     @update = g_MTConn.pendingUpdates[i];
-                    autosave = update.Apply(editor) || autosave;
-                    log_trace("!!!!!!!!!!!!!!!!!!    "+tostring(update.ty)+"       applied pending update: " + i);
+                    if (S_YoloMode && update.metaPlayerMwIdValue == g_localPlayerWsidMwIdValue) {
+                        log_trace("YOLO: skipping local player's action from server");
+                    } else {
+                        autosave = update.Apply(editor) || autosave;
+                        log_trace("!!!!!!!!!!!!!!!!!!    "+tostring(update.ty)+"       applied pending update: " + i);
+                        if (!feed_hasPlacedSomething) {
+                            feed_hasPlacedSomething = true;
+                            feed_hasPlacedSomethingTime = Time::Now;
+                            dev_trace("has placed: true, " + Time::Now);
+                        }
+                    }
                     CheckUpdateForMissingBlocksItems(update);
                 }
                 if (g_MTConn.pendingUpdates[nbPendingUpdates - 1].ty == MTUpdateTy::Place) {
@@ -298,13 +318,24 @@ namespace Editor {
                 }
                 g_MTConn.pendingUpdates.RemoveRange(0, nbPendingUpdates);
 
-                if (g_MTConn.pendingUpdates.Length == 0 && S_DoDesyncCheckAutomatically) {
-                    // only check for desync after we're done processing everything
-                    if (desyncCheckNonce % S_DesyncCheckPlacePeriod == 0) {
-                        autosave = CheckForDesyncObjects() || autosave;
-                        log_trace("checked for desync objects");
+                if (g_MTConn.pendingUpdates.Length == 0) {
+                    if (!feed_hasSyncronized && feed_hasPlacedSomething) {
+                        if (feed_hasPlacedSomethingTime + 1000 < Time::Now) {
+                            feed_hasSyncronized = true;
+                            if (feedStart_WasYoloModeEnabled) {
+                                S_YoloMode = true;
+                                dev_trace("re-enabled yolo mode after sync");
+                            }
+                        }
                     }
-                    desyncCheckNonce++;
+                    if (S_DoDesyncCheckAutomatically) {
+                        // only check for desync after we're done processing everything
+                        if (desyncCheckNonce % S_DesyncCheckPlacePeriod == 0) {
+                            autosave = CheckForDesyncObjects() || autosave;
+                            log_trace("checked for desync objects");
+                        }
+                        desyncCheckNonce++;
+                    }
                 }
 
                 // uint newPlacedTotal = placedB.Length + placedI.Length;
@@ -432,7 +463,7 @@ namespace Editor {
     void CheckUpdateForMissingBlocksItems(MTUpdate@ update) {
         if (!update.isUndoable) return;
         auto place = cast<MTPlaceUpdate>(update);
-        if (place !is null) {
+        if (place !is null && !place.isFromLocalPlayer) {
             for (uint i = 0; i < place.mb.Blocks.Length; i++) {
                 if (place.mb.Blocks[i].BlockInfo is null) {
                     g_MTConn.statusMsgs.AddGameEvent(UserPlacedMissingBlockItemEvent(update.meta.GetPlayer(), place.mb.Blocks[i].name));
@@ -468,6 +499,11 @@ namespace Editor {
     void Editor_UndoToLastCached(CGameCtnEditorFree@ editor) {
         auto autosaveStruct = GetAutosaveStructPtr(editor);
         auto currAutosaveIx = GetAutosaveStackPos(autosaveStruct);
+        if (S_YoloMode) {
+            log_trace("YOLO: currAutosaveIx: " + currAutosaveIx + ", cacheAutosavedIx: " + cacheAutosavedIx + " -> " + currAutosaveIx);
+            cacheAutosavedIx = currAutosaveIx;
+            return;
+        }
         log_trace("currAutosaveIx: " + currAutosaveIx + ", cacheAutosavedIx: " + cacheAutosavedIx);
         if (currAutosaveIx >= 0 && cacheAutosavedIx >= 0) {
             while (currAutosaveIx > int(cacheAutosavedIx)) {

@@ -40,6 +40,9 @@ bool S_ShowChatAsStatusMsg = true;
 [Setting hidden]
 uint S_ChatMsgLenLimit = 45;
 
+[Setting hidden]
+bool S_YoloMode = false;
+
 
 [SettingsTab name="Other"]
 void RenderST_Other() {
@@ -107,6 +110,10 @@ void DrawSettingsGameUiTab() {
     UI::Separator();
     UI::AlignTextToFramePadding();
     UI::Text("\\$ddd >> Performance / Debug");
+
+    S_YoloMode = UI::Checkbox("YOLO Mode (up to 3x Performance)   \\$f84" + Icons::ExclamationTriangle, S_YoloMode);
+    AddSimpleTooltip("YOLO mode disables the main consistency mechanism used by Map Together. Normally, Map Together will track the last action it executed (which was recieved from the server). When you make actions locally, they are sent to the server. When actions are recieved, Map Together calls Undo() on all your actions until the map is at the last known good state. Then actions are applied in the order recieved from the server. This adds performance overhead because of the redundant placing and deleting of blocks, but it keeps things consistent. By enabling YOLO mode, you will most likely run into more inconsistencies, but there will be significantly less overhead applying updates recieved from the server. In the case of desync situations, see the desync tab.\n\nWhen YOLO mode is active, Undo() is not called before applying updates, and your own actions recieved from the server are ignored.");
+
 
     RenderST_Other();
     S_MaximumPlacementTime = uint(UI::SliderFloat("Max Placement Time (ms)", float(S_MaximumPlacementTime), 1.0, 3000.0, "%.0f", UI::SliderFlags::None));

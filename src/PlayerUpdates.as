@@ -42,6 +42,13 @@ class MTUpdate {
     bool get_isUndoable() {
         return false;
     }
+    uint get_metaPlayerMwIdValue() {
+        if (meta is null) return uint(-1);
+        return meta.playerMwId.Value;
+    }
+    bool get_isFromLocalPlayer() {
+        return metaPlayerMwIdValue == g_localPlayerWsidMwIdValue;
+    }
     void DrawAdminRow(uint i) {
         throw("implemented elsewhere");
     }

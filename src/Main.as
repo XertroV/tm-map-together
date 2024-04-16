@@ -201,7 +201,7 @@ bool g_RenderingChat = false;
 void RenderMainWindow() {
     g_RenderingChat = false;
     if (!g_WindowOpen) return;
-    UI::SetNextWindowSize(400, 400, UI::Cond::FirstUseEver);
+    UI::SetNextWindowSize(600, 600, UI::Cond::FirstUseEver);
     // "Map Together  \\$aaa(by XertroV)"
     if (UI::Begin(S_NiceName ? PLUGIN_WINDOW_NAME : PLUGIN_WINDOW_NAME_STRIPPED, g_WindowOpen)) {
         UI::BeginTabBar("mt-main-tabs", UI::TabBarFlags::None);

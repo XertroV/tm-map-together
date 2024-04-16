@@ -186,8 +186,8 @@ void DrawCreateRoomForm_TopPart() {
 
     UI::BeginDisabled();
     m_newRoomActionLimit = 0;
-    m_AllowCustomItems = UI::Checkbox("Allow Custom Items", m_AllowCustomItems);
-    m_AllowSweeps = UI::Checkbox("Allow Sweeps (Delete All)", m_AllowSweeps);
+    m_AllowCustomItems = UI::Checkbox("(Disabled; Future Update) Allow Custom Items", m_AllowCustomItems);
+    // m_AllowSweeps = UI::Checkbox("Allow Sweeps (Delete All)", m_AllowSweeps);
     UI::EndDisabled();
 }
 

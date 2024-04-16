@@ -27,6 +27,11 @@ void DrawDesyncTab() {
     }
     if (UI::Button("Check for Desync (and fix)")) {
         Editor::CheckForDesyncObjects(false);
+        // need to cache and restore yolo mode if it's active because that ignores player actions
+        _mWasYoloModeEnabled = S_YoloMode;
+        S_YoloMode = false;
+        dev_trace("disabled yolo mode, was: " + _mWasYoloModeEnabled);
+        // add desync actions to pending actions so they're processed in the normal loop
         if (Editor::desyncLastExtra !is null) {
             g_MTConn.pendingUpdates.InsertLast(MTDeleteUpdate(Editor::desyncLastExtra));
         }
@@ -34,7 +39,22 @@ void DrawDesyncTab() {
             g_MTConn.pendingUpdates.InsertLast(MTPlaceUpdate(Editor::desyncLastMissing.PopulateMacroblock(Editor::MakeMacroblockSpec())));
         }
         Notify("Updated desync status and inserted updates");
+        startnew(CheckDesyncAgainSoon);
     }
+}
+
+bool _mWasYoloModeEnabled = false;
+
+void CheckDesyncAgainSoon() {
+    // let updates be processed
+    yield();
+    // let free blocks be deleted
+    yield();
+    // one more for luck
+    yield();
+    Editor::CheckForDesyncObjects(false);
+    S_YoloMode = _mWasYoloModeEnabled;
+    dev_trace("restored yolo mode to: " + _mWasYoloModeEnabled);
 }
 
 void Desync_DrawMacroblockSummary(const string &in title, Editor::MacroblockSpec@ mb) {
