@@ -754,3 +754,31 @@ bool CopiableLabeledPassword(const string &in label, const string &in pw) {
     }
     return false;
 }
+
+
+
+namespace CheckPause {
+    uint g_LastPause = Time::Now;
+    bool g_workPaused = false;
+    uint g_lastPauseAfterDuration;
+    bool MbYield(uint workMs = 150) {
+        if (g_workPaused) {
+            while (g_workPaused) {
+                yield();
+            }
+            // return true;
+        }
+        // uint workMs = Time::Now < 20000 ? 10 : 100;
+        if (g_LastPause + workMs < Time::Now) {
+            g_workPaused = true;
+            g_lastPauseAfterDuration = Time::Now - g_LastPause;
+            trace('pausing_ at '+Time::Now+' after duration: ' + g_lastPauseAfterDuration);
+            yield();
+            trace('unpaused at ' + Time::Now);
+            g_LastPause = Time::Now;
+            g_workPaused = false;
+            return true;
+        }
+        return false;
+    }
+}

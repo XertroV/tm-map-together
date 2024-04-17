@@ -462,6 +462,7 @@ class MapTogetherConnection {
         while (IsConnecting) yield();
         while (IsConnected) {
             // while (PauseAutoRead) yield();
+            CheckPause::MbYield();
             @next = ReadMTUpdateMsg();
             COUNT_MESSAGES_READ++;
             if (COUNT_MESSAGES_READ % 100 == 0) {
@@ -1217,9 +1218,12 @@ class PlayerInRoom {
     bool get_isLakanta() {
         return playerMwId.Value == MwId_Value_Lakanta;
     }
-    // bool get_isDeepDipper() {
-    //     return playerMwId.Value
-    // }
+    bool get_isDeepDipper() {
+        return Is_MwId_Value_DD2(playerMwId.Value);
+    }
+    bool get_isTNTree() {
+        return playerMwId.Value == MwId_Value_TNTree;
+    }
 
     void CheckForCustomTitle() {
         if (isXertroV) {
@@ -1231,7 +1235,7 @@ class PlayerInRoom {
         } else if (isTrunckley) {
             customTitle = "No-Mountains";
         } else if (isArEyeses || isArDotDotDot) {
-            customTitle = "Troll Kacky Mapper";
+            customTitle = "Troll Mapper";
         } else if (isKora) {
             customTitle = "Cutmaster";
         } else if (isSpike) {
@@ -1240,10 +1244,10 @@ class PlayerInRoom {
             customTitle = "Mad Bastard";
         } else if (isEyebo) {
             customTitle = "KEKLator";
-        // } else if (isDeepDipper) {
-        //     customTitle = "Deep Dipper"
-        // } else if (isTntree) {
-        //     customTitle = "";
+        } else if (isDeepDipper) {
+            customTitle = "Deep Dipper";
+        } else if (isTNTree) {
+            customTitle = "Manslaughterer";
         } else {
             customTitle = "Mapper";
         }
