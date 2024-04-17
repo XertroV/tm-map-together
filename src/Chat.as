@@ -88,7 +88,8 @@ class ServerChat {
             }
             if (scrollToBottom) {
                 scrollToBottom = false;
-                UI::SetScrollY(UI::GetScrollMaxY());
+                // todo: figure out why we need +100 and where this call should be to avoid it.
+                UI::SetScrollY(UI::GetScrollMaxY() + 100);
             }
         }
         UI::EndChild();

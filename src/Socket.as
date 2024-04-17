@@ -479,6 +479,10 @@ class MapTogetherConnection {
                     || next.ty == MTUpdateTy::Admin_SetActionLimit
                     || next.ty == MTUpdateTy::ChatMsg
                 ) {
+                    if (next.ty == MTUpdateTy::ChatMsg) {
+                        serverChat.scrollToBottom = true;
+                        // todo: detect if scrolled up and don't scroll. only if already at the bottom
+                    }
                     next.Apply(null);
                 } else if (next.ty == MTUpdateTy::SetSkin) {
                     auto skin = cast<MTSetSkinUpdate>(next);
