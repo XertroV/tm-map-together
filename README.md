@@ -49,7 +49,7 @@ to test:
 - [ ] is the server reliably sending msgs?
 
 - [x] desync detection + custom blocks/items (no loop, or other issues)
--
+- [ ] calc fast shadows afer placing blocks
 
 todo:
 recent:

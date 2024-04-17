@@ -1217,6 +1217,9 @@ class PlayerInRoom {
     bool get_isLakanta() {
         return playerMwId.Value == MwId_Value_Lakanta;
     }
+    // bool get_isDeepDipper() {
+    //     return playerMwId.Value
+    // }
 
     void CheckForCustomTitle() {
         if (isXertroV) {
@@ -1237,6 +1240,10 @@ class PlayerInRoom {
             customTitle = "Mad Bastard";
         } else if (isEyebo) {
             customTitle = "KEKLator";
+        // } else if (isDeepDipper) {
+        //     customTitle = "Deep Dipper"
+        // } else if (isTntree) {
+        //     customTitle = "";
         } else {
             customTitle = "Mapper";
         }
