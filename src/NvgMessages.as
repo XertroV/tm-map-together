@@ -94,6 +94,13 @@ class MTEventAdminSetActionLimit : MTGameEvent {
     }
 }
 
+class PossibleTimeoutEvent : MTGameEvent {
+    PossibleTimeoutEvent() {
+        col = vec4(1, .5, .2, 1);
+        msg = "Warning! Possible timeout/disconnect.";
+    }
+}
+
 class ChatMsgEvent : MTGameEvent {
     ChatMsgEvent(ChatMessage@ cmsg) {
         // PlayerInRoom@ player, const string &in msg, int64 ts

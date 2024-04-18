@@ -326,6 +326,8 @@ void DrawMainUI_Inner() {
         UI::Text("\\$aaaEnter the editor if it gets stuck.");
         if (g_MTConn !is null) {
             UI::Text("Connected to " + g_MTConn.remote_domain);
+            UI::SameLine();
+            UI::Text("| Server Total Players: " + g_MTConn.nbPlayersOnServer);
             UI::Text("Status: " + tostring(g_ConnectionStage));
             if (UI::Button("Disconnect")) {
                 g_MTConn.Close();
@@ -389,6 +391,8 @@ void DrawMainUI_Inner() {
         return;
     }
     UI::Text("Connected to " + g_MTConn.remote_domain);
+    UI::SameLine();
+    UI::Text("| Server Total Players: " + g_MTConn.nbPlayersOnServer);
 
     UI::Separator();
 

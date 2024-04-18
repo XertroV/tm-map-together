@@ -10,6 +10,8 @@ const uint8 MAP_BASE_STADIUM155 = 0b10000000;
 
 uint32 COUNT_MESSAGES_READ = 0;
 
+const uint PING_LOOP_WAIT_MS = 5000;
+
 enum ConnectionStage {
     None, GettingAuthToken, ConnectingToServer, Joining, Creating, OpeningEditor, Done
 }
@@ -55,6 +57,9 @@ class MapTogetherConnection {
     uint totalBlocksRemoved;
     uint totalItemsPlaced;
     uint totalItemsRemoved;
+
+    uint nbPlayersOnServer;
+    uint lastPingResp;
 
     StatusMsgUI@ statusMsgs = StatusMsgUI();
     ServerChat@ serverChat = ServerChat();
@@ -202,8 +207,27 @@ class MapTogetherConnection {
         trace('starting read updates loop');
         startnew(Editor::EditorFeedGen_Loop);
         startnew(CoroutineFunc(this.ReadUpdatesLoop));
+        startnew(CoroutineFunc(this.PingLoop));
         IS_CONNECTING = false;
         g_ConnectionStage = ConnectionStage::Done;
+    }
+
+    void PingLoop() {
+        uint lastPing = 0;
+        uint lastWarn = 0;
+        lastPingResp = Time::Now;
+
+        while (!IsShutdown) {
+            if (lastPing + PING_LOOP_WAIT_MS < Time::Now) {
+                lastPing = Time::Now;
+                SendPingMessage();
+            }
+            if (lastPingResp + PING_LOOP_WAIT_MS * 2 < Time::Now && lastWarn + PING_LOOP_WAIT_MS * 2 < Time::Now) {
+                lastWarn = Time::Now;
+                g_MTConn.statusMsgs.AddGameEvent(PossibleTimeoutEvent());
+            }
+            yield();
+        }
     }
 
     bool get_IsConnected() {
@@ -324,9 +348,9 @@ class MapTogetherConnection {
             return;
         }
         log_info('Sent auth to server');
-        // send version details
+        // send version details VERSION_BYTES
         socket.Write(uint8(0xFF));
-        socket.Write(uint8(0x04));
+        socket.Write(uint8(0x05));
         socket.Write(uint8(0x80));
     }
 
@@ -347,6 +371,7 @@ class MapTogetherConnection {
         @socket = null;
     }
 
+    // for when invite to map
     protected int ignorePlace = 0;
     protected int ignorePlaceSkins = 0;
 
@@ -457,6 +482,11 @@ class MapTogetherConnection {
         WriteLPString(socket, msg);
     }
 
+    void SendPingMessage() {
+        if (socket is null) return;
+        socket.Write(uint8(MTUpdateTy::Ping));
+    }
+
     // not used
     bool PauseAutoRead = false;
     MTUpdate@[] pendingUpdates;
@@ -484,6 +514,7 @@ class MapTogetherConnection {
                     || next.ty == MTUpdateTy::VehiclePos
                     || next.ty == MTUpdateTy::Admin_SetActionLimit
                     || next.ty == MTUpdateTy::ChatMsg
+                    || next.ty == MTUpdateTy::ServerStats
                 ) {
                     if (next.ty == MTUpdateTy::ChatMsg) {
                         serverChat.scrollToBottom = true;
@@ -767,9 +798,9 @@ class MapTogetherConnection {
         // }
 
         // min size: 17 (u8 + 0u32 + 0u32 + u64)
-        while (socket !is null && socket.Available() < 16) {
-            return null;
-            // yield_why("ReadMTUpdateMsg_LT17BytesAvail");
+        while (socket !is null && socket.Available() < 14) {
+            yield_why("ReadMTUpdateMsg_LT17BytesAvail");
+            CheckPause::ResetTime();
         }
         if (socket is null) return null;
         auto start_avail = socket.Available();
@@ -781,12 +812,12 @@ class MapTogetherConnection {
             throw('ReadMTUpdateMsg: bad msg length! > 10MB');
         }
         uint timeoutAt = Time::Now + 15000;
-        while (socket.Available() < int(len + meta_bytes) && Time::Now < timeoutAt) {
+        while (socket !is null && socket.Available() < int(len + meta_bytes) && Time::Now < timeoutAt) {
             dev_trace("Waiting for more bytes to read update: " + len + "; available: " + socket.Available() + "; start_avail: " + start_avail + "; ty: " + ty);
             yield_why("ReadMTUpdateMsg_WaitForLengthBytes");
         }
         if (Time::Now >= timeoutAt) {
-            NotifyError("Netcode issue detected: timeout reading update. Please reload the plugin. Open a fresh map, and rejoin the room.");
+            NotifyError("Netcode issue detected: timeout reading update. Please rejoin the room.");
             CloseWithErr("Failed to read update from server: timeout");
             return null;
         }
@@ -897,6 +928,8 @@ enum MTUpdateTy {
     Admin_SetRoomPlayerLimit = 18,
     Admin_AlertStatusToAll = 19,
     ChatMsg = 20,
+    Ping = 21,
+    ServerStats = 22,
     // not numbered yet
     // put new commands above this
     XXX_LAST
@@ -981,6 +1014,11 @@ MTUpdate@ BufToMTUpdate(MTUpdateTy ty, MemoryBuffer@ buf) {
             return SetActionLimitUpdate(buf);
         case MTUpdateTy::ChatMsg:
             return ChatUpdate(buf);
+        case MTUpdateTy::Ping:
+            warn("PING UPDATE SHOULD NEVER RECIEVE ON CLIENT");
+            return PingUpdate(buf);
+        case MTUpdateTy::ServerStats:
+            return ServerStatsUpdate(buf);
     }
     return null;
 }

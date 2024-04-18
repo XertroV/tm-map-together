@@ -349,8 +349,36 @@ void WriteIso4ToBuf(MemoryBuffer@ buf, iso4 mat) {
 }
 
 
+class ServerStatsUpdate : MTUpdate {
+    uint nbPlayers;
 
+    ServerStatsUpdate(MemoryBuffer@ buf) {
+        ty = MTUpdateTy::ServerStats;
+        ReadFromBuf(buf);
+    }
 
+    ServerStatsUpdate@ ReadFromBuf(MemoryBuffer@ buf) {
+        nbPlayers = buf.ReadUInt32();
+        return this;
+    }
+
+    bool Apply(CGameCtnEditorFree@ editor) override {
+        if (g_MTConn is null) return false;
+        g_MTConn.nbPlayersOnServer = nbPlayers;
+        g_MTConn.lastPingResp = Time::Now;
+        return false;
+    }
+}
+
+class PingUpdate : MTUpdate {
+    PingUpdate(MemoryBuffer@ buf) {
+        super();
+        ty = MTUpdateTy::Ping;
+    }
+    bool Apply(CGameCtnEditorFree@ editor) override {
+        return false;
+    }
+}
 
 class ChatUpdate : MTUpdate {
     string msg;
