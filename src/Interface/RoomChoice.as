@@ -18,7 +18,7 @@ void DrawRoomMenuChoiceMain() {
         if (UI::Selectable("Germany", m_CurrServer == MTServers::De)) {
             m_CurrServer = MTServers::De;
         }
-        if (UI::Selectable("United States (Forwards to Aus atm)", m_CurrServer == MTServers::Us)) {
+        if (UI::Selectable("United States", m_CurrServer == MTServers::Us)) {
             m_CurrServer = MTServers::Us;
         }
         if (UI::Selectable("Development", m_CurrServer == MTServers::Dev)) {

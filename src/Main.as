@@ -297,7 +297,7 @@ string ServerToName(MTServers server) {
     switch (server) {
         case MTServers::Au: return "Australia";
         case MTServers::De: return "Germany";
-        case MTServers::Us: return "United States (TODO)";
+        case MTServers::Us: return "United States";
         case MTServers::Dev: return "Development";
     }
     return "Unknown";
