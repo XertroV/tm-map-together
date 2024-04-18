@@ -11,6 +11,7 @@ const uint8 MAP_BASE_STADIUM155 = 0b10000000;
 uint32 COUNT_MESSAGES_READ = 0;
 
 const uint PING_LOOP_WAIT_MS = 5000;
+const uint PING_LOOP_TIMEOUT_MS = PING_LOOP_WAIT_MS * 3 + 1500;
 
 enum ConnectionStage {
     None, GettingAuthToken, ConnectingToServer, Joining, Creating, OpeningEditor, Done
@@ -222,7 +223,7 @@ class MapTogetherConnection {
                 lastPing = Time::Now;
                 SendPingMessage();
             }
-            if (lastPingResp + PING_LOOP_WAIT_MS * 2 < Time::Now && lastWarn + PING_LOOP_WAIT_MS * 2 < Time::Now) {
+            if (lastPingResp + PING_LOOP_TIMEOUT_MS < Time::Now && lastWarn + PING_LOOP_TIMEOUT_MS < Time::Now) {
                 lastWarn = Time::Now;
                 g_MTConn.statusMsgs.AddGameEvent(PossibleTimeoutEvent());
             }
@@ -868,8 +869,12 @@ class MapTogetherConnection {
             log_warn("Failed to read update from server");
             return null;
         }
-        auto @meta = ReadMsgTail(socket);
-        @update.meta = meta;
+        if (update.meta !is null) {
+            ReadMsgTail(socket, update.meta);
+        } else {
+            auto @meta = ReadMsgTail(socket);
+            @update.meta = meta;
+        }
         if (update.ty != ty) {
             log_warn("Mismatched update type: " + tostring(update.ty) + " != " + tostring(ty));
         }
@@ -962,6 +967,7 @@ enum MTUpdateTy {
 
 PlayerCamCursor@ tmpPlayerCamCursor = PlayerCamCursor();
 VehiclePos@ tmpVehiclePos = VehiclePos();
+ServerStatsUpdate@ tmpServerStatsUpdate = ServerStatsUpdate();
 
 MTUpdate@ BufToMTUpdate(MTUpdateTy ty, MemoryBuffer@ buf) {
     switch (ty) {
@@ -1018,7 +1024,7 @@ MTUpdate@ BufToMTUpdate(MTUpdateTy ty, MemoryBuffer@ buf) {
             warn("PING UPDATE SHOULD NEVER RECIEVE ON CLIENT");
             return PingUpdate(buf);
         case MTUpdateTy::ServerStats:
-            return ServerStatsUpdate(buf);
+            return tmpServerStatsUpdate.ReadFromBuf(buf);
     }
     return null;
 }
@@ -1069,11 +1075,17 @@ MemoryBuffer@ ReadBufFromSocket(Net::Socket@ socket, uint32 len) {
     return buf;
 }
 
-MsgMeta@ ReadMsgTail(Net::Socket@ socket) {
+MsgMeta@ ReadMsgTail(Net::Socket@ socket, MsgMeta@ overwriteMM = null) {
     auto playerId = ReadLPString(socket);
     auto timestamp = socket.ReadUint64();
-    return MsgMeta(playerId, timestamp);
-    // return null;
+    if (overwriteMM is null) {
+        return MsgMeta(playerId, timestamp);
+    } else {
+        overwriteMM.playerId = playerId;
+        overwriteMM.timestamp = timestamp;
+        overwriteMM.UpdateMwIdAndName();
+        return overwriteMM;
+    }
 }
 
 
@@ -1086,10 +1098,14 @@ class MsgMeta {
 
     MsgMeta(const string &in playerId, uint64 timestamp) {
         this.playerId = playerId;
-        playerMwId.SetName(playerId);
         this.timestamp = timestamp;
-        if (g_MTConn !is null) playerName = g_MTConn.LookupName(playerId);
+        UpdateMwIdAndName();
         MTUpdateCount_Meta_Created++;
+    }
+
+    void UpdateMwIdAndName() {
+        playerMwId.SetName(playerId);
+        if (g_MTConn !is null) playerName = g_MTConn.LookupName(playerId);
     }
 
     ~MsgMeta() {

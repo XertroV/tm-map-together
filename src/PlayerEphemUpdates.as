@@ -352,6 +352,10 @@ void WriteIso4ToBuf(MemoryBuffer@ buf, iso4 mat) {
 class ServerStatsUpdate : MTUpdate {
     uint nbPlayers;
 
+    ServerStatsUpdate() {
+        ty = MTUpdateTy::ServerStats;
+    }
+
     ServerStatsUpdate(MemoryBuffer@ buf) {
         ty = MTUpdateTy::ServerStats;
         ReadFromBuf(buf);
