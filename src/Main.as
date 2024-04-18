@@ -761,6 +761,9 @@ namespace CheckPause {
     uint g_LastPause = Time::Now;
     bool g_workPaused = false;
     uint g_lastPauseAfterDuration;
+    void ResetTime() {
+        g_LastPause = Time::Now;
+    }
     bool MbYield(uint workMs = 150) {
         if (g_workPaused) {
             while (g_workPaused) {

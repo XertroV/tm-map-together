@@ -179,14 +179,19 @@ class MapTogetherConnection {
             yield();
             this.SendMapAsMacroblock();
         } else {
+            if (IsShutdown) return;
             if (editor is null) Notify("Waiting to enter editor...");
             trace('cast and check loop:');
             while (GetApp().Editor is null || (@editor = cast<CGameCtnEditorFree>(GetApp().Editor)) is null) {
                 trace('yield: waiting for editor to be non-null');
+                if (IsShutdown) return;
                 yield();
             }
             trace('editor non-null');
-            while (GetApp().Editor !is null && !editor.PluginMapType.IsEditorReadyForRequest) yield();
+            while (GetApp().Editor !is null && !editor.PluginMapType.IsEditorReadyForRequest) {
+                if (IsShutdown) return;
+                yield();
+            }
             yield();
         }
 
@@ -464,11 +469,11 @@ class MapTogetherConnection {
             // while (PauseAutoRead) yield();
             CheckPause::MbYield();
             @next = ReadMTUpdateMsg();
-            COUNT_MESSAGES_READ++;
-            if (COUNT_MESSAGES_READ % 100 == 0) {
-                log_info("[Cumulative] Have read " + COUNT_MESSAGES_READ + " messages");
-            }
             if (next !is null) {
+                COUNT_MESSAGES_READ++;
+                if (COUNT_MESSAGES_READ % 100 == 0) {
+                    log_info("[Cumulative] Have read " + COUNT_MESSAGES_READ + " messages");
+                }
                 if (ignorePlace > 0 && next.ty == MTUpdateTy::Place) {
                     ignorePlace--;
                 } else if (ignorePlaceSkins > 0 && next.ty == MTUpdateTy::SetSkin) {
@@ -512,7 +517,9 @@ class MapTogetherConnection {
                     log_trace('socket is null, breaking read updates loop');
                     return;
                 } else {
-                    log_warn("got null message in update loop");
+                    // log_warn("got null message in update loop");
+                    // null here means no message to read, and we need to reset checkpause to prevent an immediate yield after next message.
+                    CheckPause::ResetTime();
                 }
                 yield();
             }
@@ -761,7 +768,8 @@ class MapTogetherConnection {
 
         // min size: 17 (u8 + 0u32 + 0u32 + u64)
         while (socket !is null && socket.Available() < 16) {
-            yield_why("ReadMTUpdateMsg_LT17BytesAvail");
+            return null;
+            // yield_why("ReadMTUpdateMsg_LT17BytesAvail");
         }
         if (socket is null) return null;
         auto start_avail = socket.Available();
