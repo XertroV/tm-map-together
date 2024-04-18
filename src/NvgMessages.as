@@ -98,6 +98,7 @@ class PossibleTimeoutEvent : MTGameEvent {
     PossibleTimeoutEvent() {
         col = vec4(1, .5, .2, 1);
         msg = "Warning! Possible timeout/disconnect.";
+        this.animDuration = 15.0;
     }
 }
 

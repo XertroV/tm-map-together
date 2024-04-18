@@ -816,6 +816,7 @@ class MapTogetherConnection {
         while (socket !is null && socket.Available() < int(len + meta_bytes) && Time::Now < timeoutAt) {
             dev_trace("Waiting for more bytes to read update: " + len + "; available: " + socket.Available() + "; start_avail: " + start_avail + "; ty: " + ty);
             yield_why("ReadMTUpdateMsg_WaitForLengthBytes");
+            CheckPause::ResetTime();
         }
         if (Time::Now >= timeoutAt) {
             NotifyError("Netcode issue detected: timeout reading update. Please rejoin the room.");
