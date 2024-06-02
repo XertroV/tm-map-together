@@ -58,6 +58,7 @@ namespace Editor {
     //     }
     // }
 
+    // used for the local (this user) undo stack
     bool m_ShouldIgnoreNextAction = false;
 
     bool feedStart_WasYoloModeEnabled = false;
@@ -105,7 +106,9 @@ namespace Editor {
         MacroblockSpec@ delMb;
 
         bool wasInPlayground = false;
+        log_trace('[Loop] starting inner loop');
         while (app.Editor !is null) {
+            if (dev_TraceEachLoop) log_trace("[Loop] start");
             wasInPlayground = false;
             while (app.CurrentPlayground !is null || cast<CGameCtnEditorFree>(app.Editor) is null || app.LoadProgress.State != NGameLoadProgress::EState::Disabled) {
                 if (g_MTConn is null) break;
@@ -113,17 +116,19 @@ namespace Editor {
                 wasInPlayground = true;
                 // g_MTConn.PauseAutoRead = true;
                 // ReadIntoPendingMessagesWithDiscard();
-                yield();
+                yield_why("[Loop] in playground or loading");
             }
             if (wasInPlayground) {
                 wasInPlayground = false;
-                yield();
+                yield_why("[Loop] was in playground");
             }
             if (g_MTConn is null) break;
 
+            if (dev_TraceEachLoop) log_trace("[Loop] start 2");
+
             // g_MTConn.PauseAutoRead = false;
             @editor = cast<CGameCtnEditorFree>(app.Editor);
-            if (editor is null) { yield(); continue; }
+            if (editor is null) { yield_why("null editor?!"); continue; }
 
             // Note: editor.PluginMapType.IsEditorReadyForRequest is false when in skinning mode
             // we still want to listen for updates, though, so we continue through until we get to actually applying updates and skip at that point.
@@ -143,6 +148,13 @@ namespace Editor {
 
             uint origPlacedTotal = placedB.Length + placedI.Length;
             uint origDelTotal = delB.Length + delI.Length;
+
+            if (origPlacedTotal > 0 || origDelTotal > 0) {
+                log_trace("placed  B/I: " + placedB.Length + " / " + placedI.Length);
+                log_trace("deleted B/I: " + delB.Length + " / " + delI.Length);
+            } else if (dev_TraceEachLoop) {
+                log_trace(" [Loop] no placed blocks/items");
+            }
 
             if (placedB.Length > 0 || placedI.Length > 0) {
                 @placeMb = Editor::MakeMacroblockSpec(placedB, placedI);
@@ -180,6 +192,8 @@ namespace Editor {
                 g_MTConn.WriteDeleted(delMb);
                 if (!m_ShouldIgnoreNextAction) {
                     myUpdateStack.InsertLast(MTDeleteUpdate(delMb));
+                } else {
+                    dev_trace('ignoring placed');
                 }
                 reportUpdates = true;
             }
@@ -200,6 +214,8 @@ namespace Editor {
                 g_MTConn.WritePlaced(placeMb);
                 if (!m_ShouldIgnoreNextAction) {
                     myUpdateStack.InsertLast(MTPlaceUpdate(placeMb));
+                } else {
+                    dev_trace('ignoring deleted');
                 }
                 reportUpdates = true;
             }
@@ -219,27 +235,15 @@ namespace Editor {
             }
 
             if (!editor.PluginMapType.IsEditorReadyForRequest) {
-                yield();
+                yield_why("[Loop] IsEditorReadyForRequest is false");
                 continue;
             }
 
-
-            // if (!g_MTConn.socket.CanRead()) {
-            //     log_warn('can read: false');
-            //     break;
-            // }
-            // auto nbPendingUpdates = pendingUpdates.Length;
-            // auto updates = g_MTConn.ReadUpdates(50);
-            // if (updates is null) break;
             auto nbPendingUpdates = Math::Clamp(g_MTConn.pendingUpdates.Length, 0, 50);
-            // auto nbUpdates = updates.Length;
-            // if (reportUpdates || nbUpdates > 0 || nbPendingUpdates > 0) {
             if (reportUpdates || nbPendingUpdates > 0) {
-                // log_trace("updates: " +updates.Length+ ", nbPendingUpdates: " + nbPendingUpdates);
                 log_trace("nbPendingUpdates: " + nbPendingUpdates);
             }
 
-            // if (nbPendingUpdates > 0 || nbUpdates > 0) {
             // special case: the last update is the thing we just placed, and that's the only change
             bool skipNormalProcessing = false;
             if (S_EnablePlacementOptmization_Skip1TrivialMine && nbPendingUpdates == 1 && Editor_GetCurrPosInUndoStack(editor) == cacheAutosavedIx + 1) {
@@ -358,7 +362,13 @@ namespace Editor {
                 pmt.EditMode = editMode;
                 log_debug("restored edit mode: " + tostring(pmt.EditMode));
             }
-            yield();
+            if (dev_TraceEachLoop) {
+                log_trace("[Loop] end");
+            }
+            sleep(0);
+            // https://github.com/openplanet-nl/issues/issues/494
+            // yield();
+            // yield_why("loop end");
         }
         log_warn('exited Editor::EditorFeedGen_Loop');
         if (g_MTConn !is null) {

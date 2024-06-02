@@ -258,9 +258,10 @@ class MapTogetherConnection {
             return;
         }
         log_trace('Expecting room details, avail: ' + socket.Available());
-        log_trace('socket can read: ' + socket.CanRead() + ' waiting for CanRead + available');
+        log_trace('socket IsReady: '+socket.IsReady()+ ' (waiting if not)');
         uint timeoutAt = Time::Now + 7000;
-        while (!socket.CanRead() && socket.Available() < 2 && Time::Now <= timeoutAt) yield_why("waiting to read room details");
+        while (!socket.IsReady() && Time::Now <= timeoutAt) yield_why("waiting for IsReady");
+        while (!socket.IsHungUp() && socket.Available() < 2 && Time::Now <= timeoutAt) yield_why("waiting to read room details");
         if (Time::Now > timeoutAt && socket.Available() < 9) {
             warn("Timeout connecting.");
             CloseWithErr("Failed to read room details: timeout");
@@ -298,8 +299,12 @@ class MapTogetherConnection {
 
     bool ExpectOKResp() {
         if (socket is null) return false;
-        log_trace('Expecting OK response; waiting for CanRead and available');
-        while (!socket.CanRead() && socket.Available() < 3) yield();
+        log_trace('Expecting OK response; waiting for available');
+        while (!socket.IsHungUp() && socket.Available() < 3) yield();
+        if (socket.IsHungUp()) {
+            CloseWithErr("Server hung up");
+            return false;
+        }
         log_trace('Got enough bytes to read, avail: ' + socket.Available());
         auto resp = socket.ReadRaw(3);
         log_trace('Read bytes OK_/ERR, avail: ' + socket.Available());
@@ -330,7 +335,7 @@ class MapTogetherConnection {
             return;
         }
         log_trace('waiting for timeout, write and read');
-        while (Time::Now < timeoutAt && !socket.CanWrite() && !socket.CanRead()) {
+        while (Time::Now < timeoutAt && !socket.IsReady() && !socket.IsHungUp()) {
             yield();
         }
         if (Time::Now >= timeoutAt) {
@@ -426,43 +431,43 @@ class MapTogetherConnection {
 
     void WritePlaced(Editor::MacroblockSpec@ mb) {
         if (socket is null) return;
-        socket.Write(uint8(MTUpdateTy::Place));
         auto buf = MemoryBuffer();
         mb.WriteToNetworkBuffer(buf);
         // if (mb.blocks.Length > 0) {
         //     log_trace('Writing placed: mb.blocks[0].mobilVariant: ' + mb.blocks[0].mobilVariant);
         // }
         buf.Seek(0);
+        socket.Write(uint8(MTUpdateTy::Place));
         socket.Write(uint32(buf.GetSize()));
         socket.Write(buf, buf.GetSize());
     }
 
     void WriteDeleted(Editor::MacroblockSpec@ mb) {
         if (socket is null) return;
-        socket.Write(uint8(MTUpdateTy::Delete));
         auto buf = MemoryBuffer();
         mb.WriteToNetworkBuffer(buf);
         buf.Seek(0);
+        socket.Write(uint8(MTUpdateTy::Delete));
         socket.Write(uint32(buf.GetSize()));
         socket.Write(buf, buf.GetSize());
     }
 
     void WriteVehiclePos(const VehiclePos@ pos) {
         if (socket is null) return;
-        socket.Write(uint8(MTUpdateTy::VehiclePos));
         auto buf = MemoryBuffer();
         pos.WriteToNetworkBuffer(buf);
         buf.Seek(0);
+        socket.Write(uint8(MTUpdateTy::VehiclePos));
         socket.Write(uint32(buf.GetSize()));
         socket.Write(buf, buf.GetSize());
     }
 
     void WritePlayerCamCursor(const PlayerCamCursor@ cursor) {
         if (socket is null) return;
-        socket.Write(uint8(MTUpdateTy::PlayerCamCursor));
         auto buf = MemoryBuffer();
         cursor.WriteToNetworkBuffer(buf);
         buf.Seek(0);
+        socket.Write(uint8(MTUpdateTy::PlayerCamCursor));
         socket.Write(uint32(buf.GetSize()));
         socket.Write(buf, buf.GetSize());
     }
@@ -489,7 +494,8 @@ class MapTogetherConnection {
     }
 
     // not used
-    bool PauseAutoRead = false;
+    // bool PauseAutoRead = false;
+    // updates recieved but not applied
     MTUpdate@[] pendingUpdates;
     uint msgsRead = 0;
 
@@ -790,14 +796,6 @@ class MapTogetherConnection {
     MsgMeta@ tmpMeta = MsgMeta("asdf", 123);
 
     MTUpdate@ ReadMTUpdateMsg() {
-        // while (!socket.CanRead()) {
-        //     yield_why("ReadMTUpdateMsg_SocRead");
-        // }
-        // auto UpdateHeader = ReadUpdateMsgHeader();
-        // while (socket.Available() < UpdateHeader.PayloadLen || !socket.CanRead()) {
-        //     yield_why("ReadMTUpdateMsg_DL_Payload");
-        // }
-
         // min size: 17 (u8 + 0u32 + 0u32 + u64)
         while (socket !is null && socket.Available() < 14) {
             yield_why("ReadMTUpdateMsg_LT17BytesAvail");

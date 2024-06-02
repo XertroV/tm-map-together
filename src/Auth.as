@@ -1,20 +1,5 @@
-namespace OPAuth {
-
-}
-
-bool _AuthLoopStartEarly = false;
-
 uint lastAuthTime = 0;
 string g_opAuthToken;
-
-// don't bother with auth, we don't need it anymore with a local http server.
-void AuthLoop() {
-    // while (Time::Now < 120000 && !_AuthLoopStartEarly) yield();
-    // while (true) {
-    //     sleep(500);
-    //     CheckTokenUpdate();
-    // }
-}
 
 bool _IsRequestingAuthToken = false;
 const string CheckTokenUpdate() {

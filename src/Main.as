@@ -196,14 +196,28 @@ void Render() {
 
 }
 
+bool dev_TraceEachLoop = false;
+
 bool g_RenderingChat = false;
 
 void RenderMainWindow() {
     g_RenderingChat = false;
     if (!g_WindowOpen) return;
     UI::SetNextWindowSize(600, 600, UI::Cond::FirstUseEver);
-    // "Map Together  \\$aaa(by XertroV)"
-    if (UI::Begin(S_NiceName ? PLUGIN_WINDOW_NAME : PLUGIN_WINDOW_NAME_STRIPPED, g_WindowOpen)) {
+    int flags = UI::WindowFlags::NoCollapse;
+#if DEV
+    flags |= UI::WindowFlags::MenuBar;
+#endif
+    if (UI::Begin(S_NiceName ? PLUGIN_WINDOW_NAME : PLUGIN_WINDOW_NAME_STRIPPED, g_WindowOpen, flags)) {
+#if DEV
+        if (UI::BeginMenuBar()) {
+            if (UI::BeginMenu("Debug")) {
+                if (UI::MenuItem("Log Trace each Loop")) dev_TraceEachLoop = !dev_TraceEachLoop;
+                UI::EndMenu();
+            }
+            UI::EndMenuBar();
+        }
+#endif
         UI::BeginTabBar("mt-main-tabs", UI::TabBarFlags::None);
         if (UI::BeginTabItem("Main")) {
             DrawMainUI_Inner();
