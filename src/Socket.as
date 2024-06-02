@@ -1,3 +1,5 @@
+#if DEPENDENCY_EDITOR
+
 const uint meta_bytes = 46;
 
 // const uint8 MAP_MOOD_DAY = 0;
@@ -1419,3 +1421,5 @@ enum RulesFlags {
     AllowSweeps = 2,
     AllowSelectionCut = 3,
 }
+
+#endif

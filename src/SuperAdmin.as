@@ -1,3 +1,5 @@
+#if DEPENDENCY_EDITOR
+
 string m_SuperAdminMsg;
 
 void DrawSuperAdminUI() {
@@ -19,3 +21,5 @@ void DrawSuperAdminUI() {
         g_MTConn.statusMsgs.AddGameEvent(UserPlacedMissingBlockItemEvent(p, "TEST.Item.Gbx"));
     }
 }
+
+#endif

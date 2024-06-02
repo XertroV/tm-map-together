@@ -1,3 +1,5 @@
+#if DEPENDENCY_EDITOR
+
 uint MTUpdateCount_Created = 0;
 uint MTUpdateCount_Destroyed = 0;
 uint MTUpdateCount_Place_Created = 0;
@@ -320,3 +322,5 @@ class SetActionLimitUpdate : MTUpdate {
         return false;
     }
 }
+
+#endif

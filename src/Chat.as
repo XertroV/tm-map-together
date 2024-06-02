@@ -1,3 +1,5 @@
+#if DEPENDENCY_EDITOR
+
 bool g_OpenCentralChatWindow = false;
 
 void DrawChatTab() {
@@ -106,6 +108,7 @@ class ServerChat {
         UI::SetNextItemWidth(200);
         m_chatMsg = UI::InputText("##m-chat-msg", m_chatMsg, changed, UI::InputTextFlags::EnterReturnsTrue);
         bool chatFieldFocused = UI::IsItemFocused();
+
         if (changed && Editor::IsShiftDown()) {
             UI::SetKeyboardFocusHere(-1);
         } else if (changed) {
@@ -135,3 +138,4 @@ class ServerChat {
         }
     }
 }
+#endif

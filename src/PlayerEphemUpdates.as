@@ -1,3 +1,5 @@
+#if DEPENDENCY_EDITOR
+
 class PlayerCamCursor : MTUpdate, HasPlayerLabelDraw {
     iso4 cam_matrix;
     vec3 target;
@@ -427,3 +429,7 @@ class ChatUpdate : MTUpdate {
         return false;
     }
 }
+
+
+
+#endif

@@ -1,3 +1,5 @@
+#if DEPENDENCY_EDITOR
+
 void DrawDesyncTab() {
     auto @extra = Editor::desyncLastExtra;
     auto @missing = Editor::desyncLastMissing;
@@ -131,3 +133,5 @@ void Desync_DrawOctTreeSummary(const string &in title, OctTreeNode@ ot) {
         UI::TreePop();
     }
 }
+
+#endif

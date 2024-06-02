@@ -1,3 +1,5 @@
+#if DEPENDENCY_EDITOR
+
 
 float BaseFontHeight {
     get {
@@ -192,3 +194,6 @@ vec2 GameEventsTopLeft {
         return tl;
     }
 }
+
+
+#endif
