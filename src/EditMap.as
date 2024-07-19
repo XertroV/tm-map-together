@@ -42,9 +42,9 @@ void EditNewMapFrom(MapBase base, MapMood mood, MapCar vehicle, nat3 size, const
     }
 
     if (m_DisableClubItems_Patch) {
-        Patch_DisableClubFavItems.Apply();
+        EditorPatches::DisableClubItems_IsApplied = true;
     } else if (m_EnableClubItemsSkip) {
-        Patch_SkipClubFavItemUpdate.Apply();
+        EditorPatches::SkipClubFavItemUpdate_IsApplied = true;
     }
 
     trace("Calling EditNewMap2(" + decoId + ", " + tostring(vehicle) + ")");
@@ -68,8 +68,7 @@ void EditNewMapFrom(MapBase base, MapMood mood, MapCar vehicle, nat3 size, const
         trace('edit map: waiting for editor');
         while (app.Editor is null) yield();
         trace('edit map: disabling patches');
-        Patch_DisableClubFavItems.Unapply();
-        Patch_SkipClubFavItemUpdate.Unapply();
+        EditorPatches::UnapplyAny();
 
         trace('edit map: waiting for editor null');
         while (app.Editor !is null) yield();

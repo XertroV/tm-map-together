@@ -14,6 +14,13 @@
 namespace EditorPatches {
     Editor::InvPatchType _applied = Editor::InvPatchType::None;
 
+    void UnapplyAny() {
+        if (_applied != Editor::InvPatchType::None) {
+            Editor::NextEditorLoad_EnableInventoryPatch(Editor::InvPatchType::None);
+            _applied = Editor::InvPatchType::None;
+        }
+    }
+
     bool get_DisableClubItems_IsApplied() {
         return _applied == Editor::InvPatchType::SkipClubEntirely;
     }

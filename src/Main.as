@@ -278,8 +278,7 @@ void Unload() {
         @g_MTConn = null;
     }
     UserUndoRedoDisablePatchEnabled = false;
-    Patch_DisableClubFavItems.Unapply();
-    Patch_SkipClubFavItemUpdate.Unapply();
+    EditorPatches::UnapplyAny();
     CleanupEditorIntercepts();
     Patch_DisableSweeps.Unapply();
 }
