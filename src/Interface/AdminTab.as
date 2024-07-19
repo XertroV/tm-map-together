@@ -58,12 +58,12 @@ void DrawAdminTabSkins() {
         auto @log = g_MTConn.setSkinLog;
         UI::ListClipper clip(log.Length);
 
-        if (UI::BeginTable("adm-skin-table", 6, UI::TableFlags::SizingStretchSame)) {
+        if (UI::BeginTable("adm-skin-table", 4, UI::TableFlags::SizingStretchSame)) {
             UI::TableSetupColumn("#", UI::TableColumnFlags::WidthFixed, 50);
             UI::TableSetupColumn("Player", UI::TableColumnFlags::WidthStretch);
             UI::TableSetupColumn("Type", UI::TableColumnFlags::WidthFixed, 100);
-            UI::TableSetupColumn("FG Skin", UI::TableColumnFlags::WidthStretch);
-            UI::TableSetupColumn("BG Skin", UI::TableColumnFlags::WidthStretch);
+            // UI::TableSetupColumn("FG Skin", UI::TableColumnFlags::WidthStretch);
+            // UI::TableSetupColumn("BG Skin", UI::TableColumnFlags::WidthStretch);
             UI::TableSetupColumn("View", UI::TableColumnFlags::WidthFixed, 100);
             UI::TableHeadersRow();
 

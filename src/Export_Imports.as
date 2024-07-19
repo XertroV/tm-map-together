@@ -5,4 +5,4 @@ namespace EditorPatches {
     import void set_SkipClubFavItemUpdate_IsApplied(bool value) from "MapTogether";
 }
 
-import void EditNewMapFrom(MapBase base, MapMood mood, MapCar vehicle, nat3 size) from "MapTogether";
+import void EditNewMapFrom(MapBase base, MapMood mood, MapCar vehicle, nat3 size, const string &in collection = "Stadium") from "MapTogether";

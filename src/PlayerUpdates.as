@@ -238,10 +238,10 @@ class MTSetSkinUpdate : MTUpdate {
         UI::Text(meta.playerName);
         UI::TableNextColumn();
         UI::Text(GetSkinType());
-        UI::TableNextColumn();
-        UI::Text(skin.fgSkin);
-        UI::TableNextColumn();
-        UI::Text(skin.bgSkin);
+        // UI::TableNextColumn();
+        // UI::Text(skin.fgSkin);
+        // UI::TableNextColumn();
+        // UI::Text(skin.bgSkin);
         UI::TableNextColumn();
         if (UI::Button(Icons::Eye + "##adm-skinview-" + i)) {
             vec3 pos;

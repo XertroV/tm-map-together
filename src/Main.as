@@ -548,8 +548,8 @@ void DrawItemDebug(const string &in label, const string &in id, Editor::ItemSpec
         UI::Text("F: " + BoolIcon(item.isFlying > 0));
         AddSimpleTooltip("F = Flying");
         CopiableLabeledValue("Has Waypoint", '' + (item.waypoint !is null));
-        CopiableLabeledValue("Has FG Skin", '' + (item.fgSkin !is null));
-        CopiableLabeledValue("Has BG Skin", '' + (item.bgSkin !is null));
+        // CopiableLabeledValue("Has FG Skin", '' + (item.fgSkin !is null));
+        // CopiableLabeledValue("Has BG Skin", '' + (item.bgSkin !is null));
         // UI::Unindent();
         UI::TreePop();
     }

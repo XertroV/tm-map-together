@@ -1,29 +1,33 @@
-// this will disable club items entirely
-MemPatcher@ Patch_DisableClubFavItems = MemPatcher(
-    "E8 ?? ?? ?? ?? 48 8B 0F 48 83 79 10 FF 0F 85 ?? ?? 00 00 48 8B 81 ?? 01 00 00",
-    {0, 13}, {"90 90 90 90 90", "90 90 90 90 90 90"}
-);
+// // this will disable club items entirely
+// MemPatcher@ Patch_DisableClubFavItems = MemPatcher(
+//     "E8 ?? ?? ?? ?? 48 8B 0F 48 83 79 10 FF 0F 85 ?? ?? 00 00 48 8B 81 ?? 01 00 00",
+//     {0, 13}, {"90 90 90 90 90", "90 90 90 90 90 90"}
+// );
 
-// this will skip the update of the club fav items, so we don't have to wait for them to download
-MemPatcher@ Patch_SkipClubFavItemUpdate = MemPatcher(
-    "E8 ?? ?? ?? ?? 48 8B 0F 48 83 79 10 FF 0F 85 ?? ?? 00 00 48 8B 81 ?? 01 00 00",
-    {13}, {"90 90 90 90 90 90"}
-);
+// // this will skip the update of the club fav items, so we don't have to wait for them to download
+// MemPatcher@ Patch_SkipClubFavItemUpdate = MemPatcher(
+//     "E8 ?? ?? ?? ?? 48 8B 0F 48 83 79 10 FF 0F 85 ?? ?? 00 00 48 8B 81 ?? 01 00 00",
+//     {13}, {"90 90 90 90 90 90"}
+// );
 
 
 namespace EditorPatches {
+    Editor::InvPatchType _applied = Editor::InvPatchType::None;
+
     bool get_DisableClubItems_IsApplied() {
-        return Patch_DisableClubFavItems.IsApplied;
+        return _applied == Editor::InvPatchType::SkipClubEntirely;
     }
     void set_DisableClubItems_IsApplied(bool value) {
-        Patch_DisableClubFavItems.IsApplied = value;
+        Editor::NextEditorLoad_EnableInventoryPatch(value ? Editor::InvPatchType::SkipClubEntirely : Editor::InvPatchType::None);
+        _applied = Editor::InvPatchType::SkipClubEntirely;
     }
 
     bool get_SkipClubFavItemUpdate_IsApplied() {
-        return Patch_SkipClubFavItemUpdate.IsApplied;
+        return _applied == Editor::InvPatchType::SkipClubUpdateCheck;
     }
     void set_SkipClubFavItemUpdate_IsApplied(bool value) {
-        Patch_SkipClubFavItemUpdate.IsApplied = value;
+        Editor::NextEditorLoad_EnableInventoryPatch(value ? Editor::InvPatchType::SkipClubUpdateCheck : Editor::InvPatchType::None);
+        _applied = Editor::InvPatchType::SkipClubUpdateCheck;
     }
 }
 

@@ -1,7 +1,7 @@
 nat3 decoOrigSize;
 CGameCtnDecoration@ decoEditMap;
 
-void EditNewMapFrom(MapBase base, MapMood mood, MapCar vehicle, nat3 size) {
+void EditNewMapFrom(MapBase base, MapMood mood, MapCar vehicle, nat3 size, const string &in environment = "Stadium") {
     if (!Permissions::OpenAdvancedMapEditor()) {
         NotifyError("You don't have permission to open the advanced map editor");
         return;
@@ -50,8 +50,7 @@ void EditNewMapFrom(MapBase base, MapMood mood, MapCar vehicle, nat3 size) {
     trace("Calling EditNewMap2(" + decoId + ", " + tostring(vehicle) + ")");
     trace("deco id name: " + decoNodIdName);
     app.ManiaTitleControlScriptAPI.EditNewMap2(
-        // m_Base == MapBase::NoStadium ? "NoStadium" : "Stadium",
-        "Stadium",
+        environment,
         decoNodIdName,
         "",
         tostring(vehicle),
