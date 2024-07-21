@@ -285,6 +285,7 @@ namespace Editor {
                 pmt.ForceMacroblockColor = false;
 
                 auto editMode = pmt.EditMode;
+                auto placeMode = pmt.PlaceMode;
 
                 log_trace("applying updates: " + nbPendingUpdates);
                 Editor_UndoToLastCached(editor);
@@ -305,7 +306,7 @@ namespace Editor {
                     if (S_YoloMode && update.metaPlayerMwIdValue == g_localPlayerWsidMwIdValue) {
                         log_trace("YOLO: skipping local player's action from server");
                     } else {
-                        autosave = update.Apply(editor) || autosave;
+                        autosave = update.Apply(editor, S_MacroblockChunkSize) || autosave;
                         log_trace("!!!!!!!!!!!!!!!!!!    "+tostring(update.ty)+"       applied pending update: " + i);
                         if (!feed_hasPlacedSomething) {
                             feed_hasPlacedSomething = true;
@@ -360,6 +361,7 @@ namespace Editor {
                 pmt.NextMbAdditionalPhaseOffset = _NextMbOffset;
                 pmt.ForceMacroblockColor = _NextMbColor;
                 pmt.EditMode = editMode;
+                pmt.PlaceMode = placeMode;
                 log_debug("restored edit mode: " + tostring(pmt.EditMode));
             }
             if (dev_TraceEachLoop) {

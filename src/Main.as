@@ -716,7 +716,7 @@ string BoolIcon(bool val, bool colored = true) {
 
 
 
-shared void AddMarkdownTooltip(const string &in msg) {
+void AddMarkdownTooltip(const string &in msg) {
     if (UI::IsItemHovered()) {
         UI::SetNextWindowSize(400, 0, UI::Cond::Appearing);
         UI::BeginTooltip();
@@ -726,17 +726,17 @@ shared void AddMarkdownTooltip(const string &in msg) {
 }
 
 
-shared void SetClipboard(const string &in msg) {
+void SetClipboard(const string &in msg) {
     IO::SetClipboard(msg);
     Notify("Copied: " + msg);
 }
 
-shared funcdef bool LabeledValueF(const string &in l, const string &in v);
+funcdef bool LabeledValueF(const string &in l, const string &in v);
 
-shared bool ClickableLabel(const string &in label, const string &in value) {
+bool ClickableLabel(const string &in label, const string &in value) {
     return ClickableLabel(label, value, ": ");
 }
-shared bool ClickableLabel(const string &in label, const string &in value, const string &in between) {
+bool ClickableLabel(const string &in label, const string &in value, const string &in between) {
     UI::Text(label.Length > 0 ? label + between + value : value);
     if (UI::IsItemHovered(UI::HoveredFlags::None)) {
         UI::SetMouseCursor(UI::MouseCursor::Hand);
@@ -751,7 +751,7 @@ bool CopiableLabeledPtr(const uint64 ptr) {
     return CopiableLabeledValue("ptr", Text::FormatPointer(ptr));
 }
 
-shared bool CopiableLabeledValue(const string &in label, const string &in value) {
+bool CopiableLabeledValue(const string &in label, const string &in value) {
     if (ClickableLabel(label, value)) {
         SetClipboard(value);
         return true;

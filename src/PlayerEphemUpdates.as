@@ -47,7 +47,7 @@ class PlayerCamCursor : MTUpdate, HasPlayerLabelDraw {
         WriteVec3ToBuffer(buf, pos);
     }
 
-    bool Apply(CGameCtnEditorFree@ editor) override {
+    bool Apply(CGameCtnEditorFree@ editor, int chunkSize = -1) override {
         if (g_MTConn is null) return false;
         g_MTConn.UpdatePlayerCamCursor(this);
         return false;
@@ -284,7 +284,7 @@ class VehiclePos : MTUpdate, HasPlayerLabelDraw {
         WriteVec3ToBuffer(buf, vel);
     }
 
-    bool Apply(CGameCtnEditorFree@ editor) override {
+    bool Apply(CGameCtnEditorFree@ editor, int chunkSize = -1) override {
         if (g_MTConn is null) return false;
         g_MTConn.UpdatePlayerVehiclePos(this);
         return false;
@@ -368,7 +368,7 @@ class ServerStatsUpdate : MTUpdate {
         return this;
     }
 
-    bool Apply(CGameCtnEditorFree@ editor) override {
+    bool Apply(CGameCtnEditorFree@ editor, int chunkSize = -1) override {
         if (g_MTConn is null) return false;
         g_MTConn.nbPlayersOnServer = nbPlayers;
         g_MTConn.lastPingResp = Time::Now;
@@ -381,7 +381,7 @@ class PingUpdate : MTUpdate {
         super();
         ty = MTUpdateTy::Ping;
     }
-    bool Apply(CGameCtnEditorFree@ editor) override {
+    bool Apply(CGameCtnEditorFree@ editor, int chunkSize = -1) override {
         return false;
     }
 }
@@ -419,7 +419,7 @@ class ChatUpdate : MTUpdate {
         WriteLPStringToBuffer(buf, msg);
     }
 
-    bool Apply(CGameCtnEditorFree@ editor) override {
+    bool Apply(CGameCtnEditorFree@ editor, int chunkSize = -1) override {
         if (g_MTConn is null) return false;
         auto p = g_MTConn.FindPlayerEver(meta.playerMwId.Value);
         if (p is null) {

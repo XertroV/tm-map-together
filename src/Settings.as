@@ -1,16 +1,16 @@
 [Setting category="UI" name="Use a colorful plugin name." description="Affects menu and window title"]
 bool S_NiceName = true;
 
-[Setting category="normally hidden" name="render player tags"]
+[Setting category="In-Room" name="render player tags"]
 bool S_RenderPlayersNvg = true;
 
-[Setting category="normally hidden" name="show status hud (pending actions)"]
+[Setting category="In-Room" name="show status hud (pending actions)"]
 bool S_RenderStatusHUD = true;
 
-[Setting category="normally hidden" name="enable trivial placement optimizations" description="skip some undo-place or undo-delete operations when nothing has happened in the mean time."]
+[Setting category="In-Room" name="enable trivial placement optimizations" description="skip some undo-place or undo-delete operations when nothing has happened in the mean time."]
 bool S_EnablePlacementOptmization_Skip1TrivialMine = true;
 
-[Setting category="normally hidden" name="enable loading NoStadium bases" description="turning this off tries to load nostadium bases normally."]
+[Setting category="In-Room" name="enable loading NoStadium bases" description="turning this off tries to load nostadium bases normally."]
 bool S_EnableNoStadiumHack = true;
 
 [Setting category="UI" name="Player Label Size" min=6 max=80 drag]
@@ -24,6 +24,9 @@ bool S_StatusEventsOnScreen = true;
 
 [Setting category="UI" name="Player tags as camera target only" description="Other players' cursors will just show their camera target pos, not their cursor position."]
 bool S_PlayerTagsAsCameraTargetOnly = false;
+
+[Setting category="Performance" name="Macorblock Chunk Size" description="The number of blocks to place or delete at once -- larger Macroblocks will be chunked. Lower values may be more stable, but higher values may be faster. 0 = no chunking. Exception: blocks on the same X,Z coordinate will not be chunked to prevent issues with placing pillars." min=0 max=1000 drag]
+uint S_MacroblockChunkSize = 100;
 
 [Setting hidden]
 uint S_MaximumPlacementTime = 1500;
@@ -99,7 +102,6 @@ void DrawSettingsGameUiTab() {
     S_EnableSettingSkins = UI::Checkbox("Enable Setting Skins   \\$f84" + Icons::ExclamationTriangle, S_EnableSettingSkins);
     AddSimpleTooltip("This will send skin updates and apply recieved updates. Disable if there's like an infinite loop or something going on.");
 
-
     UI::Separator();
     UI::AlignTextToFramePadding();
     UI::Text("\\$ddd >> Placement");
@@ -114,6 +116,12 @@ void DrawSettingsGameUiTab() {
     S_YoloMode = UI::Checkbox("YOLO Mode (up to 3x Performance)   \\$f84" + Icons::ExclamationTriangle, S_YoloMode);
     AddSimpleTooltip("YOLO mode disables the main consistency mechanism used by Map Together. Normally, Map Together will track the last action it executed (which was recieved from the server). When you make actions locally, they are sent to the server. When actions are recieved, Map Together calls Undo() on all your actions until the map is at the last known good state. Then actions are applied in the order recieved from the server. This adds performance overhead because of the redundant placing and deleting of blocks, but it keeps things consistent. By enabling YOLO mode, you will most likely run into more inconsistencies, but there will be significantly less overhead applying updates recieved from the server. In the case of desync situations, see the desync tab.\n\nWhen YOLO mode is active, Undo() is not called before applying updates, and your own actions recieved from the server are ignored.");
 
+    S_MacroblockChunkSize = Math::Max(UI::SliderInt("Macroblock Chunk Size", S_MacroblockChunkSize, 0, 1000), 0);
+    AddSimpleTooltip("The number of blocks to place or delete at once -- larger Macroblocks will be chunked. Lower values may be more stable, but higher values may be faster. 0 = no chunking. Exception: blocks on the same X,Z coordinate will not be chunked to prevent issues with placing pillars.");
+    if (S_MacroblockChunkSize == 0) {
+        UI::SameLine();
+        UI::Text(" \\$iNo limit");
+    }
 
     RenderST_Other();
     S_MaximumPlacementTime = uint(UI::SliderFloat("Max Placement Time (ms)", float(S_MaximumPlacementTime), 1.0, 3000.0, "%.0f", UI::SliderFlags::None));

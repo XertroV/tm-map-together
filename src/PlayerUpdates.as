@@ -37,7 +37,11 @@ class MTUpdate {
         MTUpdateCount_Destroyed++;
     }
 
-    bool Apply(CGameCtnEditorFree@ editor) {
+    // bool Apply(CGameCtnEditorFree@ editor) {
+    //     throw("implemented elsewhere");
+    //     return false;
+    // }
+    bool Apply(CGameCtnEditorFree@ editor, int chunkSize = -1) {
         throw("implemented elsewhere");
         return false;
     }
@@ -117,7 +121,20 @@ class MTPlaceUpdate : MTUpdateUndoable {
         MTUpdateCount_Place_Destroyed++;
     }
 
-    bool Apply(CGameCtnEditorFree@ editor) override {
+    bool Apply(CGameCtnEditorFree@ editor, int chunkSize = -1) override {
+        // chunk size <= 0 means no chunking
+        if (chunkSize > 0 && mb.Length > chunkSize) {
+            log_info("Chunking large macroblock: " + mb.Length + " > " + chunkSize);
+            Editor::MacroblockSpec@[]@ chunks = mb.CreateChunks(chunkSize);
+            for (uint i = 0; i < chunks.Length; i++) {
+                log_info("Placing chunk w/ len: " + chunks[i].Length);
+                if (!Editor::PlaceMacroblock(chunks[i], false)) {
+                    NotifyError("Failed to place macroblock chunk["+i+"]: " + chunks[i].Length);
+                }
+            }
+            return true;
+        }
+        // no chunking
         log_info('Applying place update: ' + mb.Blocks.Length + '; ' + mb.Items.Length);
         if (!Editor::PlaceMacroblock(mb, false)) {
             NotifyError("Failed to place macroblock: blocks: " + mb.Blocks.Length + "; items: " + mb.Items.Length);
@@ -157,7 +174,7 @@ class MTDeleteUpdate : MTUpdateUndoable {
         MTUpdateCount_Delete_Destroyed++;
     }
 
-    bool Apply(CGameCtnEditorFree@ editor) override {
+    bool Apply(CGameCtnEditorFree@ editor, int chunkSize = -1) override {
         if (mb is null || mb.Blocks is null || mb.Items is null) {
             log_info("mb null: " + (mb is null));
             if (mb !is null) {
@@ -212,7 +229,7 @@ class MTSetSkinUpdate : MTUpdate {
         MTUpdateCount_SetSkin_Destroyed++;
     }
 
-    bool Apply(CGameCtnEditorFree@ editor) override {
+    bool Apply(CGameCtnEditorFree@ editor, int chunkSize = -1) override {
         log_info('Applying set skin update');
         if (!Editor::SetSkins({skin})) {
             NotifyError("Failed to set skin");
@@ -268,7 +285,7 @@ class PlayerJoinUpdate : MTUpdate {
         MTUpdateCount_PlayerJoin_Destroyed++;
     }
 
-    bool Apply(CGameCtnEditorFree@ editor) override {
+    bool Apply(CGameCtnEditorFree@ editor, int chunkSize = -1) override {
         log_info('Applying player joined: ' + playerName);
         if (g_MTConn !is null) g_MTConn.AddPlayer(PlayerInRoom(playerName, meta.playerId, meta.timestamp));
         return false;
@@ -288,7 +305,7 @@ class PlayerLeaveUpdate : MTUpdate {
         MTUpdateCount_PlayerLeave_Destroyed++;
     }
 
-    bool Apply(CGameCtnEditorFree@ editor) override {
+    bool Apply(CGameCtnEditorFree@ editor, int chunkSize = -1) override {
         log_info('Applying player left: ' + playerName);
         if (g_MTConn !is null) g_MTConn.RemovePlayer(meta.playerId);
         return false;
@@ -308,7 +325,7 @@ class SetActionLimitUpdate : MTUpdate {
         MTUpdateCount_SetActionLimit_Destroyed++;
     }
 
-    bool Apply(CGameCtnEditorFree@ editor) override {
+    bool Apply(CGameCtnEditorFree@ editor, int chunkSize = -1) override {
         if (g_MTConn !is null) {
             auto p = g_MTConn.FindAdmin(meta.playerMwId);
             if (p is null) {
