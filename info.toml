@@ -7,8 +7,7 @@ siteid   = 521
 
 [script]
 #__DEFINES__
-optional_dependencies = ["Editor", "editor"]
-dependencies = ["VehicleState", "Camera"]
+dependencies = ["VehicleState", "Camera", "Editor"]
 exports = ["Export_Imports.as"]
 shared_exports = ["Export_Shared.as"]
 
