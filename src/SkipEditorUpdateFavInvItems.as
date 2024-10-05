@@ -11,7 +11,7 @@
 // );
 
 
-namespace EditorPatchesMT {
+namespace EditorPatches {
     Editor::InvPatchType _applied = Editor::InvPatchType::None;
 
     void UnapplyAny() {
