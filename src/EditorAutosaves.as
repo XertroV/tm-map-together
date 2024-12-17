@@ -9,13 +9,13 @@ uint64 GetAutosaveStructPtr(CGameCtnEditorFree@ editor) {
 }
 
 // Get the pointer from GetAutosaveStructPtr
-int GetAutosaveStackPos(uint64 ptr) {;
+int GetAutosaveStackPos(uint64 ptr) {
     if (ptr == 0) return -1;
     return Dev::ReadInt32(ptr + 0xC4);
 }
 
 // This is zero until the autosave buffer caps out at 64
-int GetAutosaveStackMinPos(uint64 ptr) {;
+int GetAutosaveStackMinPos(uint64 ptr) {
     if (ptr == 0) return -1;
     return Dev::ReadInt32(ptr + 0xC0);
 }

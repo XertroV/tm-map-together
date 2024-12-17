@@ -147,7 +147,7 @@ class PlayerCamCursor : MTUpdate, HasPlayerLabelDraw {
         bool shouldUseCoord = isPicking || isErasing || isSelecting || isSkinning;
         if (!S_PlayerTagsAsCameraTargetOnly && (isPlacing || shouldUseCoord)) {
             if (isPlacingCoord || shouldUseCoord) {
-                drawAtWorldPos = Editor::CoordToPos(this.coord) + vec3(16, 4, 16);
+                drawAtWorldPos = CoordToPos(this.coord) + vec3(16, 4, 16);
             } else if (isPlacingFree || isTesting) {
                 drawAtWorldPos = this.pos;
             }
@@ -182,6 +182,14 @@ class PlayerCamCursor : MTUpdate, HasPlayerLabelDraw {
             DrawPlayerLabel(name, screenTextPos.xy, cWhite, bgCol);
         }
     }
+}
+
+vec3 CoordToPos(const nat3 &in coord) {
+    return vec3(coord.x * 32, (int(coord.y) - 8) * 8, coord.z * 32);
+}
+
+vec3 CoordToPos(const vec3 &in coord) {
+    return vec3(coord.x * 32, (int(coord.y) - 8) * 8, coord.z * 32);
 }
 
 mixin class HasPlayerLabelDraw {
