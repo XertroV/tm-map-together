@@ -156,8 +156,10 @@ void ConnectToMapTogether_FreshMap() {
         g_MTConn.Close();
         @g_MTConn = null;
     }
-    startnew(OnNewRoom_EditorOpenNewMap);
     @g_MTConn = MapTogetherConnection(m_Password, false, m_newRoomActionLimit, m_Size, m_Mood | m_Base, m_Car, CalcRulesFlagFromForm(), m_ItemMaxSize, m_PlayerLimit);
+    // give a little time for the auth request to fire off
+    yield(3);
+    startnew(OnNewRoom_EditorOpenNewMap);
 }
 
 uint8 CalcRulesFlagFromForm() {
@@ -237,7 +239,15 @@ void DrawRoomJoinForm(bool allowLoadExisting = false, bool isPuzzle = false) {
     if (!allowLoadExisting) {
         DrawCreateRoomForm_PatchOptions();
     }
-    UI::BeginDisabled(m_RoomId.Length != 6);
+
+    bool hasServerPrefix = RoomIdHasServerPrefix(m_RoomId);
+    string roomIdNoServerPrefix = hasServerPrefix ? GetRoomIdNoServer(m_RoomId) : m_RoomId;
+    if (hasServerPrefix) {
+        m_CurrServer = ServerFromRoomId(m_RoomId);
+    }
+
+    bool badRoomIdLen = roomIdNoServerPrefix.Length != 6;
+    UI::BeginDisabled(badRoomIdLen);
     if (UI::Button("Join Room")) {
         if (isPuzzle) {
             startnew(JoinMapTogetherRoom_Puzzle);
@@ -247,10 +257,32 @@ void DrawRoomJoinForm(bool allowLoadExisting = false, bool isPuzzle = false) {
         SetLoadingScreenText("Joining Map Together Room: " + m_RoomId);
     }
     UI::EndDisabled();
+    if (badRoomIdLen) {
+        UI::TextWrapped("Room ID must be 6 characters long. (or 9 with server prefix)");
+    }
 }
 
+bool RoomIdHasServerPrefix(const string &in roomId) {
+    return roomId.StartsWith("Au_") || roomId.StartsWith("De_") || roomId.StartsWith("Us_") || roomId.StartsWith("Dev_");
+}
 
+string GetRoomIdNoServer(const string &in roomId) {
+    if (roomId.StartsWith("Au_") || roomId.StartsWith("De_") || roomId.StartsWith("Us_")) {
+        return roomId.SubStr(3);
+    }
+    if (roomId.StartsWith("Dev_")) {
+        return roomId.SubStr(4);
+    }
+    return roomId;
+}
 
+MTServers ServerFromRoomId(const string &in roomId) {
+    if (roomId.StartsWith("Au_")) return MTServers::Au;
+    if (roomId.StartsWith("De_")) return MTServers::De;
+    if (roomId.StartsWith("Us_")) return MTServers::Us;
+    if (roomId.StartsWith("Dev_")) return MTServers::Dev;
+    return MTServers::De;
+}
 
 
 void OnJoinRoom_EditorOpenNewMap() {

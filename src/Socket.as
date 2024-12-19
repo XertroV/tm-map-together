@@ -147,7 +147,7 @@ class MapTogetherConnection {
         log_info("Joining room on server: " + remote_domain);
         IS_CONNECTING = true;
         roomPassword = password;
-        this.roomId = roomId;
+        this.roomId = GetRoomIdNoServer(roomId);
         log_info("Joining room with id: " + roomId);
         startnew(CoroutineFunc(this.Init_JoinRoom));
     }
@@ -246,6 +246,10 @@ class MapTogetherConnection {
         }
     }
 
+    string RoomIdWithServer() {
+        return tostring(server) + "_" + roomId;
+    }
+
     bool get_IsConnected() {
         return socket !is null && !hasErrored && roomId.Length == 6
             && int(g_ConnectionStage) >= int(ConnectionStage::OpeningEditor);
@@ -290,7 +294,7 @@ class MapTogetherConnection {
             CloseWithErr("Invalid room id from server: " + roomId);
             return;
         }
-        m_RoomId = roomId;
+        m_RoomId = RoomIdWithServer();
         actionRateLimit = socket.ReadUint32();
         log_info("Read action rate limit: " + actionRateLimit);
         mapSize.x = socket.ReadUint8();

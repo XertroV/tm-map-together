@@ -397,7 +397,7 @@ void DrawMainUI_Inner() {
 
     UI::Separator();
 
-    CopiableLabeledValue("Room ID", g_MTConn.roomId);
+    CopiableLabeledValue("Room ID", g_MTConn.RoomIdWithServer());
     CopiableLabeledPassword("Password", g_MTConn.roomPassword);
     UI::Text("Action Rate Limit: " + g_MTConn.actionRateLimit + " (ms between actions)");
     UI::Text("Pending Updates: " + g_MTConn.pendingUpdates.Length);
