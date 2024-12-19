@@ -149,6 +149,9 @@ namespace Editor {
             uint origPlacedTotal = placedB.Length + placedI.Length;
             uint origDelTotal = delB.Length + delI.Length;
 
+            auto origPlacementMode = Editor::GetPlacementMode(editor);
+            auto origEditMode = Editor::GetEditMode(editor);
+
             if (origPlacedTotal > 0 || origDelTotal > 0) {
                 log_trace("placed  B/I: " + placedB.Length + " / " + placedI.Length);
                 log_trace("deleted B/I: " + delB.Length + " / " + delI.Length);
@@ -279,14 +282,15 @@ namespace Editor {
                 auto _NextMbOffset = pmt.NextMbAdditionalPhaseOffset;
                 auto _NextMbColor = pmt.ForceMacroblockColor;
 
+                auto editMode = pmt.EditMode;
+                auto placeMode = pmt.PlaceMode;
+
                 pmt.NextMapElemColor = CGameEditorPluginMap::EMapElemColor::Default;
                 pmt.NextItemPhaseOffset = CGameEditorPluginMap::EPhaseOffset::None;
                 pmt.NextMbAdditionalPhaseOffset = CGameEditorPluginMap::EPhaseOffset::None;
                 pmt.ForceMacroblockColor = false;
 
-                auto editMode = pmt.EditMode;
-                auto placeMode = pmt.PlaceMode;
-
+                log_debug("orig edit mode: " + tostring(editMode) + ", place mode: " + tostring(placeMode));
                 log_trace("applying updates: " + nbPendingUpdates);
                 Editor_UndoToLastCached(editor);
 
@@ -360,9 +364,16 @@ namespace Editor {
                 pmt.NextItemPhaseOffset = _NextPhaseOffset;
                 pmt.NextMbAdditionalPhaseOffset = _NextMbOffset;
                 pmt.ForceMacroblockColor = _NextMbColor;
+                log_debug("restoring edit mode: " + tostring(editMode) + ", place mode: " + tostring(placeMode));
                 pmt.EditMode = editMode;
                 pmt.PlaceMode = placeMode;
-                log_debug("restored edit mode: " + tostring(pmt.EditMode));
+                if (placeMode == CGameEditorPluginMap::EPlaceMode::Block) {
+                    editor.ButtonNormalBlockModeOnClick();
+                }
+                // set block mode
+                // set item mode
+
+                log_debug("restored edit mode: " + tostring(pmt.EditMode) + ", place mode: " + tostring(pmt.PlaceMode));
             }
             if (dev_TraceEachLoop) {
                 log_trace("[Loop] end");

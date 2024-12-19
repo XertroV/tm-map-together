@@ -191,7 +191,7 @@ class MapTogetherConnection {
             if (editor is null) Notify("Waiting to enter editor...");
             trace('cast and check loop:');
             while (GetApp().Editor is null || (@editor = cast<CGameCtnEditorFree>(GetApp().Editor)) is null) {
-                trace('yield: waiting for editor to be non-null');
+                // trace('yield: waiting for editor to be non-null');
                 if (IsShutdown) return;
                 yield();
             }
