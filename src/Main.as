@@ -365,19 +365,7 @@ void DrawMainUI_Inner() {
     }
 
     if (g_MTConn is null) {
-        // UI::Text("MTConn null.");
         DrawRoomMenuChoiceMain();
-
-        // if (UI::Button("Connect New")) {
-        //     startnew(ConnectToMapTogether);
-        // }
-        // UI::Separator();
-        // m_RoomId = UI::InputText("Room ID", m_RoomId);
-        // UI::BeginDisabled(m_RoomId.Length != 6);
-        // if (UI::Button("Join")) {
-        //     startnew(JoinMapTogetherRoom);
-        // }
-        // UI::EndDisabled();
         return;
     }
 

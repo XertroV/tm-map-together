@@ -284,6 +284,7 @@ namespace Editor {
 
                 auto editMode = pmt.EditMode;
                 auto placeMode = pmt.PlaceMode;
+                auto origItemMode = Editor::GetItemPlacementModeInt();
 
                 pmt.NextMapElemColor = CGameEditorPluginMap::EMapElemColor::Default;
                 pmt.NextItemPhaseOffset = CGameEditorPluginMap::EPhaseOffset::None;
@@ -337,7 +338,7 @@ namespace Editor {
                             }
                         }
                     }
-                    if (S_DoDesyncCheckAutomatically) {
+                    if (S_DoDesyncCheckAutomatically && !g_MTConn.isPuzzle) {
                         // only check for desync after we're done processing everything
                         if (desyncCheckNonce % S_DesyncCheckPlacePeriod == 0) {
                             autosave = CheckForDesyncObjects() || autosave;
@@ -369,6 +370,10 @@ namespace Editor {
                 pmt.PlaceMode = placeMode;
                 if (placeMode == CGameEditorPluginMap::EPlaceMode::Block) {
                     editor.ButtonNormalBlockModeOnClick();
+                }
+                if (origItemMode > 0) {
+                    Editor::SetItemPlacementModeInt(origItemMode);
+                    log_debug("restored item mode: " + tostring(origItemMode));
                 }
                 // set block mode
                 // set item mode

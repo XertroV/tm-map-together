@@ -2,8 +2,10 @@ enum MenuState {
     None,
     RoomCreate,
     RoomInvite,
+    RoomInvitePuzzle,
     RoomJoin,
     RoomJoinExisting,
+    RoomJoinExistingPuzzle,
     RoomConnectingOrRunning,
 };
 
@@ -56,6 +58,29 @@ void DrawRoomMenuChoiceMain() {
             g_MenuState = MenuState::RoomJoinExisting;
         }
         UI::EndDisabled();
+
+        UI::Separator();
+        UI::AlignTextToFramePadding();
+        UI::Text("PUZZLE TOGETHER");
+        if (IsInMainMenu) {
+            UI::TextWrapped("Load the puzzle map in the editor first.");
+        } else if (IsInEditor) {
+            auto editor = cast<CGameCtnEditorFree>(GetApp().Editor);
+            // auto map = editor.Challenge;
+            auto mapType = string(editor.PluginMapType.GetMapType());
+            if (mapType.ToLower().EndsWith("puzzle")) {
+                if (UI::Button("Create Puzzle Room")) {
+                    g_MenuState = MenuState::RoomInvitePuzzle;
+                }
+                if (UI::Button("Join Puzzle Room")) {
+                    g_MenuState = MenuState::RoomJoinExistingPuzzle;
+                }
+            } else {
+                UI::TextWrapped("Open a puzzle map. (Map type is: " + mapType + ")");
+            }
+        }
+
+
         UI::Dummy(vec2(0, 10));
         UI::Separator();
         UI::Dummy(vec2(0, 10));
@@ -105,11 +130,17 @@ void DrawMenuStateForm() {
         case MenuState::RoomInvite:
             DrawRoomInviteForm();
             break;
+        case MenuState::RoomInvitePuzzle:
+            DrawRoomInvitePuzzleForm();
+            break;
         case MenuState::RoomJoin:
             DrawRoomJoinForm();
             break;
         case MenuState::RoomJoinExisting:
             DrawRoomJoinForm(true);
+            break;
+        case MenuState::RoomJoinExistingPuzzle:
+            DrawRoomJoinForm(true, true);
             break;
         default:
             UI::Text("HUH?");
@@ -146,6 +177,11 @@ void InviteToMapTogetherRoom_ExistingMap() {
     @g_MTConn = MapTogetherConnection(m_Password, true, m_newRoomActionLimit, m_Size, m_Mood | m_Base, m_Car, CalcRulesFlagFromForm(), m_ItemMaxSize, m_PlayerLimit);
 }
 
+void InviteToMapTogetherRoom_ExistingMap_Puzzle() {
+    InviteToMapTogetherRoom_ExistingMap();
+    g_MTConn.isPuzzle = true;
+}
+
 void JoinMapTogetherRoom() {
     if (g_MTConn !is null) {
         g_MTConn.Close();
@@ -155,6 +191,11 @@ void JoinMapTogetherRoom() {
         startnew(OnJoinRoom_EditorOpenNewMap);
     }
     @g_MTConn = MapTogetherConnection(m_RoomId, m_Password);
+}
+
+void JoinMapTogetherRoom_Puzzle() {
+    JoinMapTogetherRoom();
+    g_MTConn.isPuzzle = true;
 }
 
 void DrawRoomCreateForm() {
@@ -172,7 +213,14 @@ void DrawRoomInviteForm() {
     }
 }
 
-void DrawRoomJoinForm(bool allowLoadExisting = false) {
+void DrawRoomInvitePuzzleForm() {
+    DrawCreateRoomForm_InviteToRoom();
+    if (UI::Button("Create Room")) {
+        startnew(InviteToMapTogetherRoom_ExistingMap_Puzzle);
+    }
+}
+
+void DrawRoomJoinForm(bool allowLoadExisting = false, bool isPuzzle = false) {
     if (!allowLoadExisting && IsInEditor) {
         g_MenuState = MenuState::None;
         return;
@@ -191,12 +239,15 @@ void DrawRoomJoinForm(bool allowLoadExisting = false) {
     }
     UI::BeginDisabled(m_RoomId.Length != 6);
     if (UI::Button("Join Room")) {
-        startnew(JoinMapTogetherRoom);
+        if (isPuzzle) {
+            startnew(JoinMapTogetherRoom_Puzzle);
+        } else {
+            startnew(JoinMapTogetherRoom);
+        }
         SetLoadingScreenText("Joining Map Together Room: " + m_RoomId);
     }
     UI::EndDisabled();
 }
-
 
 
 

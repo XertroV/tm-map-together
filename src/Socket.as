@@ -41,6 +41,9 @@ class MapTogetherConnection {
     MapBase mapBaseName;
     MapMood mapBaseMood;
 
+    // if true, we have some special rules around room initialization
+    bool isPuzzle;
+
     PlayerInRoom@[] playersInRoom;
     uint[] playersInRoomIds;
     PlayerInRoom@[] playersEver;
@@ -185,7 +188,10 @@ class MapTogetherConnection {
                 while (GetApp().Editor !is null && !editor.PluginMapType.IsEditorReadyForRequest) yield();
             }
             yield();
-            this.SendMapAsMacroblock();
+            if (!isPuzzle) {
+                // if we're in puzzle, both people should start on the same map.
+                this.SendMapAsMacroblock();
+            }
         } else {
             if (IsShutdown) return;
             if (editor is null) Notify("Waiting to enter editor...");
@@ -201,6 +207,13 @@ class MapTogetherConnection {
                 yield();
             }
             yield();
+        }
+
+        // if we're in puzzle, both people should start on the same map.
+        // we want to load the existing map into the mapTree so consistency checks don't trigger
+        if (isPuzzle) {
+            // take current map as mapTree
+            mapTree.AddFromMacroblockUnique(Editor::GetMapAsMacroblock().macroblock);
         }
 
         if (!MathX::Nat3Eq(mapSize, GetApp().RootMap.Size)) {
