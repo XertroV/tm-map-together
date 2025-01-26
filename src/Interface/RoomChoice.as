@@ -62,10 +62,10 @@ void DrawRoomMenuChoiceMain() {
         UI::Separator();
         UI::AlignTextToFramePadding();
         UI::Text("PUZZLE TOGETHER");
+        auto editor = cast<CGameCtnEditorFree>(GetApp().Editor);
         if (IsInMainMenu) {
             UI::TextWrapped("Load the puzzle map in the editor first.");
-        } else if (IsInEditor) {
-            auto editor = cast<CGameCtnEditorFree>(GetApp().Editor);
+        } else if (IsInEditor && editor !is null && editor.PluginMapType !is null) {
             // auto map = editor.Challenge;
             auto mapType = string(editor.PluginMapType.GetMapType());
             if (mapType.ToLower().EndsWith("puzzle")) {
@@ -78,6 +78,8 @@ void DrawRoomMenuChoiceMain() {
             } else {
                 UI::TextWrapped("Open a puzzle map. (Map type is: " + mapType + ")");
             }
+        } else {
+            UI::Text("Editor is null when it is expected to be not null.");
         }
 
 
