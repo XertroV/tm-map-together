@@ -1,3 +1,5 @@
+bool g_DropMsgsTemp = false;
+
 #if DEPENDENCY_EDITOR
 
 
@@ -240,6 +242,10 @@ namespace Editor {
             if (!editor.PluginMapType.IsEditorReadyForRequest) {
                 yield_why("[Loop] IsEditorReadyForRequest is false");
                 continue;
+            }
+
+            if (g_DropMsgsTemp) {
+                g_MTConn.pendingUpdates.RemoveRange(0, g_MTConn.pendingUpdates.Length);
             }
 
             auto nbPendingUpdates = Math::Clamp(g_MTConn.pendingUpdates.Length, 0, 50);

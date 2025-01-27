@@ -415,6 +415,18 @@ void DrawMainUI_Inner() {
     S_DrawOwnLabels = UI::Checkbox("Draw Own Labels", S_DrawOwnLabels);
 // #endif
 
+    if (UI::Button("Clear Purple Boxes")) {
+        startnew(OnClick_ClearPurpleBoxes);
+    }
+
+    // let people drop messages temporarily if need be
+    bool wasDropMsgsTmp = g_DropMsgsTemp;
+    g_DropMsgsTemp = UI::Checkbox("Drop Pending Updates Temporarily", g_DropMsgsTemp);
+    AddSimpleTooltip("Use this if an infinite loop happens in puzzle mode.");
+    if (g_DropMsgsTemp && !wasDropMsgsTmp) {
+        startnew(OnEnabled_DropMsgsTemp);
+    }
+
     if (UI::TreeNode("Players ("+g_MTConn.playersInRoom.Length+")###mt-players-main")) {
         for (uint i = 0; i < g_MTConn.playersInRoom.Length; i++) {
             g_MTConn.playersInRoom[i].DrawStatusUI();
@@ -788,5 +800,24 @@ namespace CheckPause {
             return true;
         }
         return false;
+    }
+}
+
+
+
+void OnEnabled_DropMsgsTemp() {
+    auto started = Time::Now;
+    while (g_DropMsgsTemp && started + 6000 > Time::Now) yield();
+    g_DropMsgsTemp = false;
+}
+
+void OnClick_ClearPurpleBoxes() {
+    try {
+        auto editor = cast<CGameCtnEditorFree>(GetApp().Editor);
+        auto pmt = editor.PluginMapType;
+        pmt.CustomSelectionCoords.RemoveRange(0, pmt.CustomSelectionCoords.Length);
+        pmt.HideCustomSelection();
+    } catch {
+        warn("OnClick_ClearPurpleBoxes exception: " + getExceptionInfo());
     }
 }
