@@ -13,6 +13,9 @@ bool S_EnablePlacementOptmization_Skip1TrivialMine = true;
 [Setting category="In-Room" name="enable loading NoStadium bases" description="turning this off tries to load nostadium bases normally."]
 bool S_EnableNoStadiumHack = true;
 
+[Setting category="In-Room" name="(Fixes resetting edit mode) Don't process updates when EditMode = Pick/Erase/FreeView"]
+bool S_DontUpdateWhileBadEditMode = true;
+
 [Setting category="UI" name="Player Label Size" min=6 max=80 drag]
 float S_PlayerLabelHeight = 16.0;
 
@@ -105,6 +108,9 @@ void DrawSettingsGameUiTab() {
     UI::Separator();
     UI::AlignTextToFramePadding();
     UI::Text("\\$ddd >> Placement");
+
+    S_DontUpdateWhileBadEditMode = UI::Checkbox("Don't Process Updates When in Pick/Erase/FreeView", S_DontUpdateWhileBadEditMode);
+    AddSimpleTooltip("This avoids a bug where other players placing blocks can reset you while you're in pick/erase/freeview modes.");
 
     S_EnablePlacementOptmization_Skip1TrivialMine = UI::Checkbox("Enable Trivial Placement Optimizations", S_EnablePlacementOptmization_Skip1TrivialMine);
     AddSimpleTooltip("This will skip placementes and deletions when there is only one thing to process and it was what you last did.");

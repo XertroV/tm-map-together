@@ -52,6 +52,17 @@ void Main() {
     x.SetName(g_localPlayerWSID);
     g_localPlayerWsidMwIdValue = x.Value;
     g_EnableSuperAdmin = g_localPlayerWSID == XertroV_WSID;
+
+#if DEV
+    // test importing editor functions
+    print("PosToCoord: " + Editor::PosToCoord(vec3(123, 234, 345)).ToString());
+    print("EulerToMat: ");
+    auto m = Editor::EulerToMat(vec3(2));
+    print("PitchYawRollFromRotationMatrix: ");
+    auto e = Editor::PitchYawRollFromRotationMatrix(m);
+    print("Vec3ToNat3: " + Editor::Vec3ToNat3(vec3(4)).ToString());
+    print("MTCoordToPos: " + Editor::MTCoordToPos(vec3(5)).ToString());
+#endif
 }
 
 bool g_EnableSuperAdmin;

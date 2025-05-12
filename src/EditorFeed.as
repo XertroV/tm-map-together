@@ -244,6 +244,14 @@ namespace Editor {
                 continue;
             }
 
+            // when in block placement + free view / pick / erase, processing an update will reset the mode to place.
+            // does not happen in item mode. Unknown about selection add/remove mode. For simplicity, only process updates in place mode.
+            bool skipProcessingDueToInputBugs = origEditMode != EditMode::Place;
+            if (S_DontUpdateWhileBadEditMode && skipProcessingDueToInputBugs) {
+                yield_why("[Loop] skipping processing as editMode /= Place");
+                continue;
+            }
+
             if (g_DropMsgsTemp) {
                 g_MTConn.pendingUpdates.RemoveRange(0, g_MTConn.pendingUpdates.Length);
             }

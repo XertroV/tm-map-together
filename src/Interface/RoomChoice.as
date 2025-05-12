@@ -13,6 +13,7 @@ MenuState g_MenuState = MenuState::None;
 
 void DrawRoomMenuChoiceMain() {
     UI::SetNextItemWidth(200);
+    auto preServer = m_CurrServer;
     if (UI::BeginCombo("Server", ServerToName(m_CurrServer))) {
         if (UI::Selectable("Australia", m_CurrServer == MTServers::Au)) {
             m_CurrServer = MTServers::Au;
@@ -28,6 +29,11 @@ void DrawRoomMenuChoiceMain() {
         }
         UI::EndCombo();
     }
+    bool serverChanged = preServer != m_CurrServer;
+    if (serverChanged) {
+        if (m_RoomId.Length == 9) m_RoomId = m_RoomId.SubStr(3);
+    }
+
     if (g_MenuState == MenuState::None) {
         UI::Separator();
         UI::AlignTextToFramePadding();
