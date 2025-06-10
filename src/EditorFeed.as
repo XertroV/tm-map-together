@@ -17,7 +17,7 @@ void ResetOnEnterEditor() {
     myUpdateStack.RemoveRange(0, myUpdateStack.Length);
     cacheAutosavedIx = GetAutosaveStackPos(GetAutosaveStructPtr(GetApp()));
     // Main loop works. Main is 50/50
-    startnew(Editor::CheckForFreeblockDel).WithRunContext(Meta::RunContext::GameLoop);
+    Meta::StartWithRunContext(Meta::RunContext::GameLoop, Editor::CheckForFreeblockDel);
 }
 
 uint cacheAutosavedIx = 0;

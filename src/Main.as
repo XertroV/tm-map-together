@@ -591,7 +591,7 @@ UI::InputBlocking OnKeyPress(bool down, VirtualKey key) {
     if (IsInEditor && CurrActionMap == ActionMap::CtnEditor) {
         if (down && key == VirtualKey::U) {
             // run in different context that we know runs before EditorFeed update
-            startnew(OnPressUndoInEditor).WithRunContext(Meta::RunContext::MainLoop);
+            Meta::StartWithRunContext(Meta::RunContext::MainLoop, OnPressUndoInEditor);
         }
     }
     if (IsInEditor || IsTestingOrValidating) {
