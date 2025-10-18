@@ -71,14 +71,14 @@ class MapTogetherConnection {
     ServerChat@ serverChat = ServerChat();
 
     string savePath;
-    bool saveToDisk = false;
+    bool saveToDisk = Meta::IsDeveloperMode();
 
     // create a room
     MapTogetherConnection(const string &in password, bool expectEditorImmediately,
         uint roomMsBetweenActions = 0,
         nat3 _mapSize = nat3(80, 255, 80), uint8 _mapBase = 128, uint8 _baseCar = 0,
         uint8 _rulesFlags = 0, uint _itemMaxSize = 0, uint16 _roomPlayerLimit = 0xFFFF,
-        bool _saveToDisk = false,
+        bool _saveToDisk = false
     ) {
         g_ConnectionStage = ConnectionStage::None;
         server = m_CurrServer;
@@ -284,7 +284,7 @@ class MapTogetherConnection {
         }
         log_trace('Expecting room details, avail: ' + socket.Available());
         log_trace('socket IsReady: '+socket.IsReady()+ ' (waiting if not)');
-        uint timeoutAt = Time::Now + 7000;
+        uint timeoutAt = Time::Now + 12000;
         while (!socket.IsReady() && Time::Now <= timeoutAt) yield_why("waiting for IsReady");
         while (!socket.IsHungUp() && socket.Available() < 2 && Time::Now <= timeoutAt) yield_why("waiting to read room details");
         if (Time::Now > timeoutAt && socket.Available() < 9) {
@@ -353,7 +353,7 @@ class MapTogetherConnection {
         if (socket is null) return;
         // log_trace('token: ' + op_token);
         uint startTime = Time::Now;
-        auto timeoutAt = Time::Now + 7500;
+        auto timeoutAt = Time::Now + 12500;
         log_info('Connecting to: ' + remote_domain + ':19796');
         if (!socket.Connect(remote_domain, 19796)) {
             CloseWithErr("Failed to connect to MapTogether server");
@@ -838,7 +838,7 @@ class MapTogetherConnection {
             NotifyError("Netcode issue detected: msg of len > 10MB. Please reload the plugin. Open a fresh map, and rejoin the room.");
             throw('ReadMTUpdateMsg: bad msg length! > 10MB');
         }
-        uint timeoutAt = Time::Now + 15000;
+        uint timeoutAt = Time::Now + 22500;
         while (socket !is null && socket.Available() < int(len + meta_bytes) && Time::Now < timeoutAt) {
             dev_trace("Waiting for more bytes to read update: " + len + "; available: " + socket.Available() + "; start_avail: " + start_avail + "; ty: " + ty);
             yield_why("ReadMTUpdateMsg_WaitForLengthBytes");
@@ -959,7 +959,7 @@ enum MTUpdateTy {
     Unknown = 0,
     Place = 1,
     Delete = 2,
-    // should never be recieved
+    // should never be received
     Resync = 3,
     SetSkin = 4,
     SetWaypoint = 5,

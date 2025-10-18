@@ -164,7 +164,8 @@ void ConnectToMapTogether_FreshMap() {
         g_MTConn.Close();
         @g_MTConn = null;
     }
-    @g_MTConn = MapTogetherConnection(m_Password, false, m_newRoomActionLimit, m_Size, m_Mood | m_Base, m_Car, CalcRulesFlagFromForm(), m_ItemMaxSize, m_PlayerLimit);
+    bool m_saveToDisk = Meta::IsDeveloperMode();
+    @g_MTConn = MapTogetherConnection(m_Password, false, m_newRoomActionLimit, m_Size, m_Mood | m_Base, m_Car, CalcRulesFlagFromForm(), m_ItemMaxSize, m_PlayerLimit, m_saveToDisk);
     // give a little time for the auth request to fire off
     yield(3);
     startnew(OnNewRoom_EditorOpenNewMap);
@@ -184,7 +185,8 @@ void InviteToMapTogetherRoom_ExistingMap() {
         g_MTConn.Close();
         @g_MTConn = null;
     }
-    @g_MTConn = MapTogetherConnection(m_Password, true, m_newRoomActionLimit, m_Size, m_Mood | m_Base, m_Car, CalcRulesFlagFromForm(), m_ItemMaxSize, m_PlayerLimit);
+    bool m_saveToDisk = Meta::IsDeveloperMode();
+    @g_MTConn = MapTogetherConnection(m_Password, true, m_newRoomActionLimit, m_Size, m_Mood | m_Base, m_Car, CalcRulesFlagFromForm(), m_ItemMaxSize, m_PlayerLimit, m_saveToDisk);
 }
 
 void InviteToMapTogetherRoom_ExistingMap_Puzzle() {
@@ -200,7 +202,8 @@ void JoinMapTogetherRoom() {
     if (GetApp().Editor is null) {
         startnew(OnJoinRoom_EditorOpenNewMap);
     }
-    @g_MTConn = MapTogetherConnection(m_RoomId, m_Password);
+    bool m_saveToDisk = Meta::IsDeveloperMode();
+    @g_MTConn = MapTogetherConnection(m_RoomId, m_Password, m_saveToDisk);
 }
 
 void JoinMapTogetherRoom_Puzzle() {
