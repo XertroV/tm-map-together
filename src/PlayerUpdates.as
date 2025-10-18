@@ -28,6 +28,7 @@ uint MTUpdateCount_Meta_Destroyed;
 class MTUpdate {
     MTUpdateTy ty;
     MsgMeta@ meta;
+    MemoryBuffer@ serialized; // only set when saving to disk
 
     MTUpdate() {
         MTUpdateCount_Created++;

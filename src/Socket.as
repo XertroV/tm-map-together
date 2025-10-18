@@ -70,11 +70,15 @@ class MapTogetherConnection {
     StatusMsgUI@ statusMsgs = StatusMsgUI();
     ServerChat@ serverChat = ServerChat();
 
+    string savePath;
+    bool saveToDisk = false;
+
     // create a room
     MapTogetherConnection(const string &in password, bool expectEditorImmediately,
         uint roomMsBetweenActions = 0,
         nat3 _mapSize = nat3(80, 255, 80), uint8 _mapBase = 128, uint8 _baseCar = 0,
-        uint8 _rulesFlags = 0, uint _itemMaxSize = 0, uint16 _roomPlayerLimit = 0xFFFF
+        uint8 _rulesFlags = 0, uint _itemMaxSize = 0, uint16 _roomPlayerLimit = 0xFFFF,
+        bool _saveToDisk = false,
     ) {
         g_ConnectionStage = ConnectionStage::None;
         server = m_CurrServer;
@@ -90,6 +94,7 @@ class MapTogetherConnection {
         rulesFlags = _rulesFlags;
         itemMaxSize = _itemMaxSize;
         playerLimit = _roomPlayerLimit;
+        SetSaveToDisk(_saveToDisk, "my_room");
         log_info("Creating room with password: " + roomPassword);
         startnew(CoroutineFunc(this.Init_CreateRoom));
     }
@@ -142,11 +147,12 @@ class MapTogetherConnection {
     }
 
     // join a room
-    MapTogetherConnection(const string &in roomId, const string &in password = "") {
+    MapTogetherConnection(const string &in roomId, const string &in password = "", bool _saveToDisk = false) {
         remote_domain = ServerToEndpoint(m_CurrServer);
         log_info("Joining room on server: " + remote_domain);
         IS_CONNECTING = true;
         roomPassword = password;
+        SetSaveToDisk(_saveToDisk, roomId);
         this.roomId = GetRoomIdNoServer(roomId);
         log_info("Joining room with id: " + roomId);
         startnew(CoroutineFunc(this.Init_JoinRoom));
@@ -547,12 +553,15 @@ class MapTogetherConnection {
                         // todo: detect if scrolled up and don't scroll. only if already at the bottom
                     }
                     next.Apply(null);
-                } else if (next.ty == MTUpdateTy::SetSkin) {
-                    auto skin = cast<MTSetSkinUpdate>(next);
-                    setSkinLog.InsertLast(skin);
-                    pendingUpdates.InsertLast(next);
                 } else {
+                    if (next.ty == MTUpdateTy::SetSkin) {
+                        auto skin = cast<MTSetSkinUpdate>(next);
+                        setSkinLog.InsertLast(skin);
+                    }
                     pendingUpdates.InsertLast(next);
+                    if (this.saveToDisk) {
+                        this.SaveUpdateToDisk(next);
+                    }
                 }
                 if (next.isUndoable) {
                     // add to mapTree
@@ -868,7 +877,9 @@ class MapTogetherConnection {
             //     log_warn("ReadMTUpdateMsg1: Read wrong number of bytes: Expected: " + len + "; Read: " + int32(buf.GetSize()));
             // }
             // log_trace("Buf to update now");
+            MemoryBuffer@ serialized = saveToDisk ? EncodeMTUpdateForDisk(ty, buf) : null;
             @update = BufToMTUpdate(ty, buf);
+            @update.serialized = serialized;
             // log_trace("Got update");
         }
         // if (avail - socket.Available() > int(len)) {
@@ -893,6 +904,7 @@ class MapTogetherConnection {
             auto @meta = ReadMsgTail(socket);
             @update.meta = meta;
         }
+        if (update.meta !is null) update.meta.WriteToSerialized(update.serialized);
         if (update.ty != ty) {
             log_warn("Mismatched update type: " + tostring(update.ty) + " != " + tostring(ty));
         }
@@ -924,6 +936,21 @@ class MapTogetherConnection {
         //     UI::Text("fs: " + playerLabelBaseHeight * 2.0);
         // }
         // UI::End();
+    }
+
+    // room id is "my_room" when creating a room.
+    void SetSaveToDisk(bool _saveToDisk, const string &in room_id) {
+        saveToDisk = _saveToDisk;
+        if (!_saveToDisk) return;
+        savePath = IO::FromStorageFolder(room_id + "_" + Time::Stamp + ".map_together_log");
+    }
+
+    void SaveUpdateToDisk(MTUpdate@ update) {
+        if (update is null || update.serialized is null || savePath.Length < 16) return;
+        IO::File f(savePath, IO::FileMode::Append);
+        update.serialized.Seek(0);
+        f.Write(update.serialized);
+        f.Close();
     }
 }
 
@@ -1132,6 +1159,13 @@ class MsgMeta {
 
     PlayerInRoom@ GetPlayer() {
         return g_MTConn.FindPlayerEver(playerMwId);
+    }
+
+    void WriteToSerialized(MemoryBuffer@ buf) {
+        if (buf is null) return;
+        buf.Write(uint32(playerId.Length + 2 + 8) | 0x80000000);
+        WriteLPStringToBuffer(buf, playerId);
+        buf.Write(timestamp);
     }
 }
 
@@ -1438,5 +1472,19 @@ enum RulesFlags {
     AllowSweeps = 2,
     AllowSelectionCut = 3,
 }
+
+
+
+
+MemoryBuffer@ EncodeMTUpdateForDisk(MTUpdateTy ty, MemoryBuffer@ buf) {
+    buf.Seek(0);
+    auto outBuf = MemoryBuffer();
+    outBuf.Write(uint32(ty));
+    outBuf.Write(uint32(buf.GetSize()));
+    outBuf.WriteFromBuffer(buf, buf.GetSize());
+    buf.Seek(0);
+    return outBuf;
+}
+
 
 #endif
