@@ -1097,9 +1097,7 @@ MemoryBuffer@ g_TmpMemBufForSockRead = MemoryBuffer(0);
 
 MemoryBuffer@ ReadBufFromSocket(Net::Socket@ socket, uint32 len) {
     if (len > 10000000) throw('bad msg length! > 10MB');
-    if (g_TmpMemBufForSockRead.GetSize() < len) {
-        g_TmpMemBufForSockRead.Resize(len);
-    }
+    g_TmpMemBufForSockRead.Resize(len);
     auto @buf = g_TmpMemBufForSockRead;
     buf.Seek(0);
     // auto buf = MemoryBuffer(len);
