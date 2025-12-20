@@ -124,7 +124,7 @@ class MTPlaceUpdate : MTUpdateUndoable {
 
     bool Apply(CGameCtnEditorFree@ editor, int chunkSize = -1) override {
         // chunk size <= 0 means no chunking
-        if (chunkSize > 0 && mb.Length > chunkSize) {
+        if (chunkSize > 0 && mb.Length > uint(chunkSize)) {
             log_info("Chunking large macroblock: " + mb.Length + " > " + chunkSize);
             Editor::MacroblockSpec@[]@ chunks = mb.CreateChunks(chunkSize);
             for (uint i = 0; i < chunks.Length; i++) {
