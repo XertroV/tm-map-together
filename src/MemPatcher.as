@@ -5,9 +5,11 @@ class MemPatcher {
     protected string[]@ expected;
     protected uint16[]@ offsets;
     protected bool applied;
+    protected string name;
     uint64 ptr;
 
-    MemPatcher(const string &in pattern, uint16[]@ offsets, string[]@ newBytes, string[]@ expected = {}) {
+    MemPatcher(const string &in name, const string &in pattern, uint16[]@ offsets, string[]@ newBytes, string[]@ expected = {}) {
+        this.name = name;
         this.pattern = pattern;
         @this.newBytes = newBytes;
         @this.offsets = offsets;
@@ -16,7 +18,7 @@ class MemPatcher {
         ptr = Dev::FindPattern(pattern);
         applied = false;
         if (ptr == 0) {
-            NotifyError("MemPatcher: Pattern not found: " + pattern, false);
+            NotifyError("MemPatcher ("+name+"): Pattern not found: " + pattern, false);
         } else {
             trace('Found: ' + pattern + ' at ' + Text::FormatPointer(ptr));
         }
@@ -24,6 +26,10 @@ class MemPatcher {
 
     ~MemPatcher() {
         Unapply();
+    }
+
+    string get_Name() {
+        return name;
     }
 
     bool get_IsApplied() {

@@ -1,9 +1,18 @@
-MemPatcher@ Patch_DisableSweeps = MemPatcher(
-    "0F 87 ?? ?? 00 00 48 98 0F B6 84 02 ?? ?? ?? ?? 8B 8C 82 ?? ?? ?? ?? 48 03 CA FF E1 48 8B 8F ?? ?? 00 00",
+MemPatcher@ Patch_DisableSweeps = MemPatcher("Patch_DisableSweeps",
+    "0F 87 ?? ?? ?? ?? 48 98 0F B6 84 02 ?? ?? ?? ?? 8B 8C 82 ?? ?? ?? ?? 48 03 CA FF E1 48 8B 8F ?? ?? 00 00",
     {0}, {"90 E9"}, {"0F 87"}
 );
 
 /*
+    0F 87 ?? ?? ?? ??
+    48 98
+    0F B6 84 02 ?? ?? ?? ??
+    8B 8C 82 ?? ?? ?? ??
+    48 03 CA
+    FF E1
+    48 8B 8F ?? ?? 00 00
+
+
     v ja -> jmp
     0F 87 ?? ?? 00 00 48 98 0F B6 84 02 ?? ?? ?? ?? 8B 8C 82 ?? ?? ?? ?? 48 03 CA FF E1 48 8B 8F ?? ?? 00 00
      E8 8D B6 AF FF 48 8B D8 48 C7 44 24 68 0E 00 00 00 48 8D 05 8A 31 CB 00
@@ -13,6 +22,7 @@ MemPatcher@ Patch_DisableSweeps = MemPatcher(
 
 
 ! ja -> jmp to skip every time
+Trackmania.exe.text+xxxxxx - 83 F8 21              - cmp eax,21 { 33 }
 Trackmania.exe.text+F7C12B - 0F87 94080000         - ja Trackmania.exe.text+F7C9C5 { jmp here to skip all sweeps. 0F 87 -> 90 E9 (ja -> jmp)
  }
 Trackmania.exe.text+F7C131 - 48 98                 - cdqe
@@ -38,6 +48,27 @@ Trackmania.exe.text+F7C18C - E8 4FB6AFFF           - call Trackmania.exe.text+A7
 Trackmania.exe.text+F7C191 - 48 8B D8              - mov rbx,rax
 Trackmania.exe.text+F7C194 - 48 C7 44 24 68 11000000 - mov qword ptr [rsp+68],00000011 { 17 }
 Trackmania.exe.text+F7C19D - 48 8D 05 3431CB00     - lea rax,[Trackmania.exe.rdata+3252D8] { ("Clear all blocks?") }
+
+
+2026:
+Trackmania.exe.text+FFBD56 - 83 F8 21              - cmp eax,21 { 33 }
+Trackmania.exe.text+FFBD59 - 0F87 28FBFFFF         - ja Trackmania.exe.text+FFB887
+Trackmania.exe.text+FFBD5F - 48 98                 - cdqe
+Trackmania.exe.text+FFBD61 - 0FB6 84 02 C0D8FF00   - movzx eax,byte ptr [rdx+rax+00FFD8C0]
+Trackmania.exe.text+FFBD69 - 8B 8C 82 98D8FF00     - mov ecx,[rdx+rax*4+00FFD898]
+Trackmania.exe.text+FFBD70 - 48 03 CA              - add rcx,rdx
+Trackmania.exe.text+FFBD73 - FF E1                 - jmp rcx
+Trackmania.exe.text+FFBD75 - 48 8B 8F 98040000     - mov rcx,[rdi+00000498]
+Trackmania.exe.text+FFBD7C - E8 CFEAAEFF           - call Trackmania.exe.text+AEA850
+Trackmania.exe.text+FFBD81 - 48 8B D8              - mov rbx,rax
+Trackmania.exe.text+FFBD84 - 48 C7 44 24 78 0E000000 - mov qword ptr [rsp+78],0000000E { 14 }
+Trackmania.exe.text+FFBD8D - 48 8D 05 64CACA00     - lea rax,[Trackmania.exe.rdata+33C7F8] { ("Clear terrain?") }
+Trackmania.exe.text+FFBD94 - 4C 8D 44 24 70        - lea r8,[rsp+70]
+Trackmania.exe.text+FFBD99 - 48 89 44 24 70        - mov [rsp+70],rax
+Trackmania.exe.text+FFBD9E - 48 8D 55 A0           - lea rdx,[rbp-60]
+Trackmania.exe.text+FFBDA2 - E8 F98611FF           - call Trackmania.exe.text+1144A0
+Trackmania.exe.text+FFBDA7 - 48 8D 05 4A1EC500     - lea rax,[Trackmania.exe.rdata+2E1BF8] { ("SweepTerrainAndSave") }
+
 
 
 */
