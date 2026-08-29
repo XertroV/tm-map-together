@@ -464,6 +464,13 @@ namespace MapTogether {
         if (!ParseBase(JsonStr(opts, "base"), m_Base, err)) return err;
         if (!ParseEnv(JsonStr(opts, "env"), m_Env, err)) return err;
         if (!ParseCar(JsonStr(opts, "car"), m_Car, err)) return err;
+        if (opts.HasKey("env")) {
+            // same per-env default the UI env combo applies: custom
+            // environments are natively 64x64, Stadium is 48x48. Explicit
+            // size opts below still win.
+            m_Size.x = m_Env == MapEnv::Stadium ? 48 : 64;
+            m_Size.z = m_Size.x;
+        }
         ApplySizeOpts(opts);
         return "";
     }
