@@ -316,12 +316,18 @@ void Unload() {
 */
 void OnDestroyed() {
     Unload();
+#if DEPENDENCY_EDITOR
+    KillTerrainHooks();
+#endif
     if (g_tmpPtrReadBuf_128 > 0) Dev::Free(g_tmpPtrReadBuf_128);
 }
 
 
 void OnDisabled() {
     Unload();
+#if DEPENDENCY_EDITOR
+    KillTerrainHooks();
+#endif
 }
 void OnEnabled() {
     // nothing to do (yet?)

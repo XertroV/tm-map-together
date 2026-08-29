@@ -1,16 +1,50 @@
 bool g_DropMsgsTemp = false;
 
-// Terraform sync: when E++ flags the genealogy grid dirty, wait this long for
-// the async terrain apply to settle before diffing + broadcasting.
-const uint64 TERRAIN_DIFF_DEBOUNCE_MS = 1200;
-uint64 g_TerrainDirtyAt = 0;
 // last terrain diff we broadcast; its echo needs no undo dance (see below)
 Editor::MacroblockSpec@ g_LastLocalTerrainDiff;
+
+// Terraform sync: E++'s terrain hooks own the settle debounce + genealogy
+// grid diff (see MTTerrainHooks below); the callbacks only queue here and the
+// feed loop consumes, so sends and undo-stack bookkeeping stay in one place.
+bool g_TerrainDirtyPing = false;
+array<Editor::MacroblockSpec@> g_PendingTerrainDiffs;
+
+class MTTerrainHooks : Editor::Callbacks::IEppExtension {
+    MTTerrainHooks() {
+        name = "map-together terrain sync";
+        @onTerrainDirty = CoroutineFunc(this.OnTerrainDirty);
+        @onTerrainChanged = Editor::Callbacks::ProcessTerrainChanged(this.OnTerrainChanged);
+    }
+    // fires once when local terrain edits first dirty the grid (E++ skips
+    // its own pending resyncs/applies)
+    void OnTerrainDirty() {
+        g_TerrainDirtyPing = true;
+    }
+    // fires with the settled terrain-only diff of changed cells
+    void OnTerrainChanged(Editor::MacroblockSpec@ terrainDiff) {
+        g_PendingTerrainDiffs.InsertLast(terrainDiff);
+    }
+}
+
+MTTerrainHooks@ g_MTTerrainHooks;
+
+void RegisterTerrainHooksOnce() {
+    if (g_MTTerrainHooks !is null) return;
+    @g_MTTerrainHooks = MTTerrainHooks();
+    Editor::Callbacks::Exts::RegisterExtension(g_MTTerrainHooks);
+}
+
+void KillTerrainHooks() {
+    if (g_MTTerrainHooks is null) return;
+    g_MTTerrainHooks.kill();
+    @g_MTTerrainHooks = null;
+}
 
 #if DEPENDENCY_EDITOR
 
 
 void RunEditorFeedGenerator() {
+    RegisterTerrainHooksOnce();
     startnew(Editor::EditorFeedGen_Loop);
 }
 
@@ -115,8 +149,10 @@ namespace Editor {
 
         bool wasInPlayground = false;
         log_trace('[Loop] starting inner loop');
-        // baseline for terraform sync: we broadcast grid cells that differ
-        // from this snapshot (see the terrain-dirty block below)
+        // baseline for terraform sync: drop anything the hooks picked up
+        // outside this session, then re-baseline the grid snapshot
+        g_TerrainDirtyPing = false;
+        g_PendingTerrainDiffs.RemoveRange(0, g_PendingTerrainDiffs.Length);
         Editor::RefreshTerrainSnapshot();
         while (app.Editor !is null) {
             if (dev_TraceEachLoop) log_trace("[Loop] start");
@@ -250,47 +286,34 @@ namespace Editor {
             }
 
             // Terraform lands asynchronously (~1s) and terrain blocks never
-            // appear in the placement buffers, so E++ just flags the grid as
-            // dirty; debounce past the async apply, then broadcast the changed
-            // cells as a terrain-only place update. Remote terrain applies
-            // resync E++'s snapshot themselves, so they don't echo back here.
-            if (Editor::IsTerrainDirty()) {
-                if (!Editor::IsTerrainResyncPending()) {
-                    // A local terrain edit just landed. It made editor-undo
-                    // entries but has no server update until the debounced diff
-                    // goes out, so an incoming echo's undo dance would rewind
-                    // it (resurrecting bulk-deleted terrain) with nothing in
-                    // the stream to replay it. Fold it into the confirmed
-                    // baseline immediately. (An unconfirmed block action whose
-                    // echo hasn't arrived yet gets folded in too and would be
-                    // re-applied on echo — near-idempotent, and the echo
-                    // usually beats the terraform by a wide margin.)
-                    Editor_CachePosInUndoStack(editor);
-                }
-                g_TerrainDirtyAt = Time::Now;
-                Editor::ClearTerrainDirty();
+            // appear in the placement buffers; E++'s terrain hooks own the
+            // settle debounce and the grid diff (remote applies resync the
+            // snapshot themselves, so they don't echo back through here).
+            if (g_TerrainDirtyPing) {
+                g_TerrainDirtyPing = false;
+                // A local terrain edit just landed. It made editor-undo
+                // entries but has no server update until the settled diff
+                // goes out, so an incoming echo's undo dance would rewind
+                // it (resurrecting bulk-deleted terrain) with nothing in
+                // the stream to replay it. Fold it into the confirmed
+                // baseline immediately. (An unconfirmed block action whose
+                // echo hasn't arrived yet gets folded in too and would be
+                // re-applied on echo — near-idempotent, and the echo
+                // usually beats the terraform by a wide margin.)
+                Editor_CachePosInUndoStack(editor);
             }
-            if (g_TerrainDirtyAt != 0 && Time::Now - g_TerrainDirtyAt > TERRAIN_DIFF_DEBOUNCE_MS && Editor::IsTerrainResyncPending()) {
-                // a replayed remote terraform is still settling; its snapshot
-                // resync will fold these changes in — re-arm rather than
-                // broadcasting someone else's edit back at them. (Local edits
-                // made inside this ~2s window are folded in too: a known,
-                // bounded blind spot.)
-                g_TerrainDirtyAt = Time::Now;
-            }
-            if (g_TerrainDirtyAt != 0 && Time::Now - g_TerrainDirtyAt > TERRAIN_DIFF_DEBOUNCE_MS) {
-                g_TerrainDirtyAt = 0;
-                auto terrainDiff = Editor::GetTerrainDiffSpec();
-                if (terrainDiff !is null && terrainDiff.terrains.Length > 0) {
-                    log_info("sending terrain diff: " + terrainDiff.terrains.Length + " cells");
-                    g_MTConn.WritePlaced(terrainDiff);
-                    @g_LastLocalTerrainDiff = terrainDiff;
-                    // deliberately NOT pushed onto myUpdateStack: terrain diffs
-                    // are sync bookkeeping, and a Ctrl+Z virtual-undo of one
-                    // resets the cells to collection default (not their prior
-                    // state), eating the user's undo press to destroy terrain.
-                    reportUpdates = true;
-                }
+            while (g_PendingTerrainDiffs.Length > 0) {
+                auto terrainDiff = g_PendingTerrainDiffs[0];
+                g_PendingTerrainDiffs.RemoveAt(0);
+                if (terrainDiff is null || terrainDiff.terrains.Length == 0) continue;
+                log_info("sending terrain diff: " + terrainDiff.terrains.Length + " cells");
+                g_MTConn.WritePlaced(terrainDiff);
+                @g_LastLocalTerrainDiff = terrainDiff;
+                // deliberately NOT pushed onto myUpdateStack: terrain diffs
+                // are sync bookkeeping, and a Ctrl+Z virtual-undo of one
+                // resets the cells to collection default (not their prior
+                // state), eating the user's undo press to destroy terrain.
+                reportUpdates = true;
             }
 
             if (m_ShouldIgnoreNextAction) {
