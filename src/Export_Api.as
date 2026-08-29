@@ -56,6 +56,7 @@ namespace MapTogether {
         o["rulesFlags"] = int(g_MTConn.rulesFlags);
         o["isPuzzle"] = g_MTConn.isPuzzle;
         o["isAdmin"] = g_MTConn.HasLocalAdmin();
+        o["localSkinUrl"] = g_MTConn.localSkinUrl;
         o["playerCount"] = int(g_MTConn.playersInRoom.Length);
         o["playersEver"] = int(g_MTConn.playersEver.Length);
         o["serverPlayerCount"] = int(g_MTConn.nbPlayersOnServer);
@@ -677,6 +678,8 @@ namespace MapTogether {
         o["local"] = p.isLocal;
         o["title"] = p.customTitle;
         o["lastUpdate"] = p.lastUpdate == PlayerUpdateTy::Cursor ? "cursor" : "vehicle";
+        o["testing"] = p.isTesting;
+        o["skinUrl"] = p.skinUrl;
         o["blocksPlaced"] = int(p.blocksPlaced);
         o["blocksRemoved"] = int(p.blocksRemoved);
         o["itemsPlaced"] = int(p.itemsPlaced);

@@ -438,6 +438,47 @@ class ChatUpdate : MTUpdate {
     }
 }
 
+// v7+: a player entered/left editor test mode; carries their car-skin url on
+// enter (may be empty for the default skin). Ephemeral, not replayed on join.
+class PlayerTestModeUpdate : MTUpdate {
+    bool entering;
+    string skinUrl;
+
+    PlayerTestModeUpdate() {
+        super();
+        ty = MTUpdateTy::PlayerTestMode;
+        MTUpdateCount_PlayerTestMode_Created++;
+    }
+
+    PlayerTestModeUpdate(MemoryBuffer@ buf) {
+        super();
+        ty = MTUpdateTy::PlayerTestMode;
+        MTUpdateCount_PlayerTestMode_Created++;
+        ReadFromBuf(buf);
+    }
+
+    ~PlayerTestModeUpdate() {
+        MTUpdateCount_PlayerTestMode_Destroyed++;
+    }
+
+    PlayerTestModeUpdate@ ReadFromBuf(MemoryBuffer@ buf) {
+        entering = buf.ReadUInt8() != 0;
+        skinUrl = ReadLPStringFromBuffer(buf);
+        return this;
+    }
+
+    void WriteToNetworkBuffer(MemoryBuffer@ buf) const {
+        buf.Write(uint8(entering ? 1 : 0));
+        WriteLPStringToBuffer(buf, skinUrl);
+    }
+
+    bool Apply(CGameCtnEditorFree@ editor, int chunkSize = -1) override {
+        if (g_MTConn is null) return false;
+        g_MTConn.UpdatePlayerTestMode(this);
+        return false;
+    }
+}
+
 
 
 #endif

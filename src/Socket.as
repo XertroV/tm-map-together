@@ -68,6 +68,9 @@ class MapTogetherConnection {
     uint nbPlayersOnServer;
     uint lastPingResp;
 
+    // local player's car-skin url, cached at join and refreshed on test-mode entry
+    string localSkinUrl;
+
     StatusMsgUI@ statusMsgs = StatusMsgUI();
     ServerChat@ serverChat = ServerChat();
 
@@ -227,6 +230,8 @@ class MapTogetherConnection {
         if (!MathX::Nat3Eq(mapSize, GetApp().RootMap.Size)) {
             NotifyWarning("Map size mismatch: Server: " + mapSize.ToString() + "; Local: " + GetApp().RootMap.Size.ToString());
         }
+
+        localSkinUrl = GetLocalCarSkinUrl();
 
         trace('starting read updates loop');
         startnew(Editor::EditorFeedGen_Loop);
@@ -391,8 +396,10 @@ class MapTogetherConnection {
         // send version details VERSION_BYTES
         // v6: map_base bits 2-4 carry the map environment. The server accepts v5
         // too, but refuses v5 clients joining a non-Stadium room.
+        // v7: adds the ephemeral PlayerTestMode message (test-mode enter/leave +
+        // car-skin url); the server relays it to v7+ clients only.
         socket.Write(uint8(0xFF));
-        socket.Write(uint8(0x06));
+        socket.Write(uint8(0x07));
         socket.Write(uint8(0x80));
     }
 
@@ -508,6 +515,21 @@ class MapTogetherConnection {
         socket.Write(buf, buf.GetSize());
     }
 
+    void WriteTestMode(bool entering) {
+        if (socket is null) return;
+        // refresh: the garage may have changed the skin since join
+        if (entering) localSkinUrl = GetLocalCarSkinUrl();
+        auto update = PlayerTestModeUpdate();
+        update.entering = entering;
+        update.skinUrl = entering ? localSkinUrl : "";
+        auto buf = MemoryBuffer();
+        update.WriteToNetworkBuffer(buf);
+        buf.Seek(0);
+        socket.Write(uint8(MTUpdateTy::PlayerTestMode));
+        socket.Write(uint32(buf.GetSize()));
+        socket.Write(buf, buf.GetSize());
+    }
+
     void WriteSetActionLimit(uint limit) {
         if (socket is null) return;
         if (!HasLocalAdmin()) return;
@@ -558,6 +580,7 @@ class MapTogetherConnection {
                     || next.ty == MTUpdateTy::Admin_SetActionLimit
                     || next.ty == MTUpdateTy::ChatMsg
                     || next.ty == MTUpdateTy::ServerStats
+                    || next.ty == MTUpdateTy::PlayerTestMode
                 ) {
                     if (next.ty == MTUpdateTy::ChatMsg) {
                         serverChat.scrollToBottom = true;
@@ -813,6 +836,17 @@ class MapTogetherConnection {
         }
     }
 
+    void UpdatePlayerTestMode(PlayerTestModeUpdate@ update) {
+        PlayerInRoom@ player = FindPlayerEver(update.meta.playerMwId);
+        if (player is null) {
+            warn("unexpected: player not found: " + update.meta.playerId);
+            return;
+        }
+        player.isTesting = update.entering;
+        // keep the cached skin on leave (a leave msg carries an empty url)
+        if (update.entering) player.skinUrl = update.skinUrl;
+    }
+
     void RenderPlayersNvg() {
         if (!S_RenderPlayersNvg) return;
         PlayerInRoom@ p;
@@ -890,7 +924,9 @@ class MapTogetherConnection {
             // log_trace("Buf to update now");
             MemoryBuffer@ serialized = saveToDisk ? EncodeMTUpdateForDisk(ty, buf) : null;
             @update = BufToMTUpdate(ty, buf);
-            @update.serialized = serialized;
+            // null for unknown/unimplemented types; payload is already consumed
+            // and the tail is consumed below, so the stream stays in sync.
+            if (update !is null) @update.serialized = serialized;
             // log_trace("Got update");
         }
         // if (avail - socket.Available() > int(len)) {
@@ -991,6 +1027,7 @@ enum MTUpdateTy {
     ChatMsg = 20,
     Ping = 21,
     ServerStats = 22,
+    PlayerTestMode = 23,
     // not numbered yet
     // put new commands above this
     XXX_LAST
@@ -1081,6 +1118,8 @@ MTUpdate@ BufToMTUpdate(MTUpdateTy ty, MemoryBuffer@ buf) {
             return PingUpdate(buf);
         case MTUpdateTy::ServerStats:
             return tmpServerStatsUpdate.ReadFromBuf(buf);
+        case MTUpdateTy::PlayerTestMode:
+            return PlayerTestModeUpdate(buf);
     }
     return null;
 }
@@ -1202,6 +1241,11 @@ void WriteLPString(Net::Socket@ socket, const string &in str) {
     socket.WriteRaw(str);
 }
 
+const string GetLocalCarSkinUrl() {
+    auto pi = GetApp().LocalPlayerInfo;
+    return pi is null ? "" : pi.Model_CarSport_SkinUrl;
+}
+
 string ReadLPStringFromBuffer(MemoryBuffer@ buf) {
     uint16 len = buf.ReadUInt16();
     return buf.ReadString(len);
@@ -1267,6 +1311,9 @@ class PlayerInRoom {
     PlayerUpdateTy lastUpdate = PlayerUpdateTy::Cursor;
     PlayerCamCursor lastCamCursor = PlayerCamCursor();
     VehiclePos lastVehiclePos = VehiclePos();
+    // car-skin url from this player's last test-mode entry ("" = default/unknown)
+    string skinUrl;
+    bool isTesting;
 
     PlayerInRoom(const string &in name, const string &in id, uint64 joinTime) {
         this.name = name;

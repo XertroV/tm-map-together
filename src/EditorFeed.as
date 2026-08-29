@@ -114,6 +114,7 @@ namespace Editor {
     bool feed_hasPlacedSomething = false;
     uint feed_hasPlacedSomethingTime = 0;
     bool feed_hasSyncronized = false;
+    bool feed_inTestMode = false;
 
     void EditorFeedGen_Loop() {
         RegisterTerrainHooksOnce();
@@ -121,6 +122,7 @@ namespace Editor {
         feed_hasPlacedSomething = false;
         feed_hasPlacedSomethingTime = 0;
         feed_hasSyncronized = false;
+        feed_inTestMode = false;
         S_YoloMode = false;
 
         ResetOnEnterEditor();
@@ -166,12 +168,19 @@ namespace Editor {
             wasInPlayground = false;
             while (app.CurrentPlayground !is null || cast<CGameCtnEditorFree>(app.Editor) is null || app.LoadProgress.State != NGameLoadProgress::EState::Disabled) {
                 if (g_MTConn is null) break;
-                CheckUpdateVehicle(cast<CSmArenaClient>(app.CurrentPlayground));
+                auto pg = cast<CSmArenaClient>(app.CurrentPlayground);
+                // gated on CurrentPlayground, not loop entry (this loop also
+                // covers loading/sub-editors); announcing before the vehicle
+                // check guarantees the enter message precedes the session's
+                // first VehiclePos.
+                SetTestMode(pg !is null);
+                CheckUpdateVehicle(pg);
                 wasInPlayground = true;
                 // g_MTConn.PauseAutoRead = true;
                 // ReadIntoPendingMessagesWithDiscard();
                 yield_why("[Loop] in playground or loading");
             }
+            SetTestMode(false);
             if (wasInPlayground) {
                 wasInPlayground = false;
                 yield_why("[Loop] was in playground");
@@ -528,6 +537,7 @@ namespace Editor {
             // yield();
             // yield_why("loop end");
         }
+        SetTestMode(false);
         log_warn('exited Editor::EditorFeedGen_Loop');
         if (g_MTConn !is null) {
             g_MTConn.Close();
@@ -696,6 +706,13 @@ namespace Editor {
                     : 50
             );
         }
+    }
+
+    // announces test-mode enter/leave (with the car-skin url on enter); idempotent
+    void SetTestMode(bool on) {
+        if (feed_inTestMode == on) return;
+        feed_inTestMode = on;
+        if (g_MTConn !is null) g_MTConn.WriteTestMode(on);
     }
 
     void CheckUpdateVehicle(CSmArenaClient@ pg) {

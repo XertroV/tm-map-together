@@ -100,7 +100,7 @@ namespace Tests {
         g_registry.InsertLast(TestEntry(name, fn));
     }
 
-    // Every test in src/Export_Api_Test.as, in file order. A test that is not
+    // Every test in the src/*_Test.as files, in file order. A test that is not
     // registered here never runs.
     void RegisterAll() {
         if (g_registry.Length > 0) return;
@@ -111,6 +111,8 @@ namespace Tests {
         Reg("ApplyJoinOptsValidatesRoomId", MapTogether_ApplyJoinOptsValidatesRoomId);
         Reg("WaitUntilReadyFailsWhenIdle", MapTogether_WaitUntilReadyFailsWhenIdle);
         Reg("FailShape", MapTogether_FailShape);
+        Reg("PlayerTestModeRoundTrip", MapTogether_PlayerTestModeRoundTrip);
+        Reg("VehicleMsgSerializationBench", MapTogether_VehicleMsgSerializationBench);
     }
 
     // Drives the registry through `sink`. A test that throws is reported as a
