@@ -110,7 +110,6 @@ namespace Editor {
         const array<ItemSpec@>@ placedI;
         const array<ItemSpec@>@ delI;
         const array<SetSkinSpec@>@ setSkins;
-        const array<SetSkinSpec@>@ lastSetSkins;
         MacroblockSpec@ placeMb;
         MacroblockSpec@ delMb;
 
@@ -147,13 +146,20 @@ namespace Editor {
 
             CheckUpdateCursor(editor);
 
-            // by getting the placed/del for this frame at this point, our actions will be cleared before the next frame.
-            @placedB = Editor::ThisFrameBlocksPlaced();
-            @delB = Editor::ThisFrameBlocksDeleted();
-            @placedI = Editor::ThisFrameItemsPlaced();
-            @delI = Editor::ThisFrameItemsDeleted();
-            @setSkins = Editor::ThisFrameSkinsSet();
-            @lastSetSkins = Editor::LastFrameSkinsSet();
+            // an exception mid-apply must not leave capture suppressed forever
+            Editor::ResetCaptureSuppress();
+
+            // Read the LAST frame's buffers: they are complete regardless of
+            // coroutine ordering within a frame, so placements made by other
+            // plugins / API tools (which can run after this loop within the
+            // same frame, and used to rotate away unseen) are captured too.
+            // Our own update-applies fire the same hooks but are excluded via
+            // Editor::BeginCaptureSuppress around the apply section below.
+            @placedB = Editor::LastFrameBlocksPlaced();
+            @delB = Editor::LastFrameBlocksDeleted();
+            @placedI = Editor::LastFrameItemsPlaced();
+            @delI = Editor::LastFrameItemsDeleted();
+            @setSkins = Editor::LastFrameSkinsSet();
             // trace('setSkins: ' + setSkins.Length);
             // trace('setSkinsApi: ' + Editor::ThisFrameSkinsSetByAPI().Length);
             // trace('setSkinsLastFrame: ' + Editor::LastFrameSkinsSet().Length);
@@ -377,6 +383,9 @@ namespace Editor {
 
                 log_debug("orig edit mode: " + tostring(editMode) + ", place mode: " + tostring(placeMode));
                 log_trace("applying updates: " + nbPendingUpdates);
+                // replayed edits fire the same engine hooks as user edits; keep
+                // them out of the capture buffers or we'd rebroadcast them
+                Editor::BeginCaptureSuppress();
                 Editor_UndoToLastCached(editor);
 
                 uint startPlacing = Time::Now;
@@ -463,6 +472,7 @@ namespace Editor {
                 // set item mode
 
                 log_debug("restored edit mode: " + tostring(pmt.EditMode) + ", place mode: " + tostring(pmt.PlaceMode));
+                Editor::EndCaptureSuppress();
             }
             if (dev_TraceEachLoop) {
                 log_trace("[Loop] end");
