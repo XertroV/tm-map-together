@@ -368,9 +368,9 @@ namespace Editor {
             // content is already present and equal to the echo, and dancing
             // instead editor-undoes mid-flight async terraform jobs (~1s),
             // leaving ground blocks bald.
-            auto _undoPosNow = Editor_GetCurrPosInUndoStack(editor);
+            auto undoPosNow = Editor_GetCurrPosInUndoStack(editor);
             if (S_EnablePlacementOptmization_Skip1TrivialMine && nbPendingUpdates == 1
-                && (_undoPosNow == cacheAutosavedIx + 1 || _undoPosNow == cacheAutosavedIx)) {
+                && (undoPosNow == cacheAutosavedIx + 1 || undoPosNow == cacheAutosavedIx)) {
                 auto placeUpdate = cast<MTPlaceUpdate>(g_MTConn.pendingUpdates[0]);
                 auto delUpdate = cast<MTDeleteUpdate>(g_MTConn.pendingUpdates[0]);
                 if (g_MTConn.pendingUpdates[0].ty == MTUpdateTy::Place
