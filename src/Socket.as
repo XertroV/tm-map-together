@@ -333,12 +333,17 @@ class MapTogetherConnection {
     bool ExpectOKResp() {
         if (socket is null) return false;
         log_trace('Expecting OK response; waiting for available');
-        while (!socket.IsHungUp() && socket.Available() < 3) yield();
+        // Bounded wait: if the server rejects us and closes before we finish
+        // writing (bad version, empty token), our own writes to the closed
+        // socket can RST away the buffered ERR and IsHungUp() may never trip,
+        // so an unbounded loop here spins forever with no error surfaced.
+        uint okTimeoutAt = Time::Now + 15000;
+        while (!socket.IsHungUp() && socket.Available() < 3 && Time::Now <= okTimeoutAt) yield();
         // check Available() before IsHungUp(): the server writes ERR + a message
         // and then shuts down immediately, so the socket is usually already hung
         // up with the error still buffered and perfectly readable.
         if (socket.Available() < 3) {
-            CloseWithErr("Server hung up");
+            CloseWithErr(Time::Now > okTimeoutAt ? "Timeout waiting for server response" : "Server hung up");
             return false;
         }
         log_trace('Got enough bytes to read, avail: ' + socket.Available());
@@ -351,7 +356,8 @@ class MapTogetherConnection {
         } else {
             // the message follows as a length-prefixed string; once hung up, all
             // of it is already buffered.
-            while (!socket.IsHungUp() && socket.Available() < 2) yield();
+            uint msgTimeoutAt = Time::Now + 3000;
+            while (!socket.IsHungUp() && socket.Available() < 2 && Time::Now <= msgTimeoutAt) yield();
             auto msg = socket.Available() < 2 ? "(no message)" : ReadLPString(socket);
             CloseWithErr("Error from Server: " + msg);
         }
@@ -363,6 +369,12 @@ class MapTogetherConnection {
         //
         g_ConnectionStage = ConnectionStage::GettingAuthToken;
         string op_token = GetAuthToken();
+        if (op_token.Length == 0) {
+            // the server rejects empty tokens anyway; fail here so the error is
+            // immediate and names the real cause instead of a handshake timeout
+            CloseWithErr("No Openplanet auth token (Auth::GetToken failed; unsigned/dev-loaded plugins can't refresh tokens)");
+            return;
+        }
         g_ConnectionStage = ConnectionStage::ConnectingToServer;
         if (socket is null) return;
         // log_trace('token: ' + op_token);
