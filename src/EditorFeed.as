@@ -3,6 +3,12 @@ bool g_DropMsgsTemp = false;
 // last terrain diff we broadcast; its echo needs no undo dance (see below)
 Editor::MacroblockSpec@ g_LastLocalTerrainDiff;
 
+// Hold the undo dance briefly after sending local placements: ground-block
+// terraform lands as an async engine job (~1s, longer unfocused), and the
+// dance's editor-undo kills pending jobs, leaving the sender's blocks bald.
+const uint64 DANCE_HOLD_AFTER_SEND_MS = 1500;
+uint64 g_HoldDanceUntil = 0;
+
 // Terraform sync: E++'s terrain hooks own the settle debounce + genealogy
 // grid diff (see MTTerrainHooks below); the callbacks only queue here and the
 // feed loop consumes, so sends and undo-stack bookkeeping stay in one place.
@@ -270,6 +276,7 @@ namespace Editor {
                     }
                 }
                 g_MTConn.WritePlaced(placeMb);
+                g_HoldDanceUntil = Time::Now + DANCE_HOLD_AFTER_SEND_MS;
                 if (!m_ShouldIgnoreNextAction) {
                     myUpdateStack.InsertLast(MTPlaceUpdate(placeMb));
                 } else {
@@ -347,7 +354,14 @@ namespace Editor {
 
             // special case: the last update is the thing we just placed, and that's the only change
             bool skipNormalProcessing = false;
-            if (S_EnablePlacementOptmization_Skip1TrivialMine && nbPendingUpdates == 1 && Editor_GetCurrPosInUndoStack(editor) == cacheAutosavedIx + 1) {
+            // +1 = a user action made one undo entry; +0 = an API placement
+            // (pmt.PlaceBlock makes no undo entry). Both are safe to skip: the
+            // content is already present and equal to the echo, and dancing
+            // instead editor-undoes mid-flight async terraform jobs (~1s),
+            // leaving ground blocks bald.
+            auto _undoPosNow = Editor_GetCurrPosInUndoStack(editor);
+            if (S_EnablePlacementOptmization_Skip1TrivialMine && nbPendingUpdates == 1
+                && (_undoPosNow == cacheAutosavedIx + 1 || _undoPosNow == cacheAutosavedIx)) {
                 auto placeUpdate = cast<MTPlaceUpdate>(g_MTConn.pendingUpdates[0]);
                 auto delUpdate = cast<MTDeleteUpdate>(g_MTConn.pendingUpdates[0]);
                 if (g_MTConn.pendingUpdates[0].ty == MTUpdateTy::Place
@@ -386,6 +400,14 @@ namespace Editor {
                     skipNormalProcessing = true;
                     g_MTConn.pendingUpdates.RemoveAt(0);
                 }
+            }
+
+            if (!skipNormalProcessing && nbPendingUpdates > 0 && Time::Now < g_HoldDanceUntil) {
+                // pending non-trivial updates while our own terraform may
+                // still be applying: wait out the hold rather than dancing
+                // (the dance would kill the async terrain job)
+                yield_why("holding dance for in-flight local terraform");
+                continue;
             }
 
             if (!skipNormalProcessing && nbPendingUpdates > 0) {
