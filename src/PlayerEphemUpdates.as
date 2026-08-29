@@ -438,7 +438,7 @@ class ChatUpdate : MTUpdate {
     }
 }
 
-// v7+: a player entered/left editor test mode; carries their car-skin url on
+// v6+: a player entered/left editor test mode; carries their car-skin url on
 // enter (may be empty for the default skin). Ephemeral, not replayed on join.
 class PlayerTestModeUpdate : MTUpdate {
     bool entering;

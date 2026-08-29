@@ -394,12 +394,12 @@ class MapTogetherConnection {
         }
         log_info('Sent auth to server');
         // send version details VERSION_BYTES
-        // v6: map_base bits 2-4 carry the map environment. The server accepts v5
-        // too, but refuses v5 clients joining a non-Stadium room.
-        // v7: adds the ephemeral PlayerTestMode message (test-mode enter/leave +
-        // car-skin url); the server relays it to v7+ clients only.
+        // v6: map_base bits 2-4 carry the map environment (server accepts v5
+        // too, but refuses v5 clients joining a non-Stadium room), plus the
+        // ephemeral PlayerTestMode message (test-mode enter/leave + car-skin
+        // url), relayed to v6+ clients only.
         socket.Write(uint8(0xFF));
-        socket.Write(uint8(0x07));
+        socket.Write(uint8(0x06));
         socket.Write(uint8(0x80));
     }
 
