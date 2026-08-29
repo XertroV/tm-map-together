@@ -1,7 +1,8 @@
 bool g_DropMsgsTemp = false;
 
-// last terrain diff we broadcast; its echo needs no undo dance (see below)
-Editor::MacroblockSpec@ g_LastLocalTerrainDiff;
+// terrain diffs we recently broadcast and whose echoes are still expected;
+// matching echoes are dropped outright (see the echo filter in the feed loop)
+array<Editor::MacroblockSpec@> g_RecentLocalTerrainDiffs;
 
 // Hold the undo dance briefly after sending local placements: ground-block
 // terraform lands as an async engine job (~1s, longer unfocused), and the
@@ -162,6 +163,7 @@ namespace Editor {
         // outside this session, then re-baseline the grid snapshot
         g_TerrainDirtyPing = false;
         g_PendingTerrainDiffs.RemoveRange(0, g_PendingTerrainDiffs.Length);
+        g_RecentLocalTerrainDiffs.RemoveRange(0, g_RecentLocalTerrainDiffs.Length);
         Editor::RefreshTerrainSnapshot();
         while (app.Editor !is null) {
             if (dev_TraceEachLoop) log_trace("[Loop] start");
@@ -325,7 +327,8 @@ namespace Editor {
                 if (terrainDiff is null || terrainDiff.terrains.Length == 0) continue;
                 log_info("sending terrain diff: " + terrainDiff.terrains.Length + " cells");
                 g_MTConn.WritePlaced(terrainDiff);
-                @g_LastLocalTerrainDiff = terrainDiff;
+                g_RecentLocalTerrainDiffs.InsertLast(terrainDiff);
+                if (g_RecentLocalTerrainDiffs.Length > 32) g_RecentLocalTerrainDiffs.RemoveAt(0);
                 // deliberately NOT pushed onto myUpdateStack: terrain diffs
                 // are sync bookkeeping, and a Ctrl+Z virtual-undo of one
                 // resets the cells to collection default (not their prior
@@ -354,6 +357,30 @@ namespace Editor {
 
             if (g_DropMsgsTemp) {
                 g_MTConn.pendingUpdates.RemoveRange(0, g_MTConn.pendingUpdates.Length);
+            }
+
+            // Drop echoes of our own recent terrain diffs at ANY queue depth.
+            // An own echo carries nothing new (the cells are already live
+            // locally), and applying one forces the cells back to their
+            // capture-time state -- eating anything placed there since. With
+            // several diffs in flight a single-update trivial-skip never
+            // matches, so the stale echoes used to be applied one by one,
+            // razing fresh terrain square by square.
+            if (g_RecentLocalTerrainDiffs.Length > 0) {
+                for (int ei = 0; ei < int(g_MTConn.pendingUpdates.Length); ei++) {
+                    auto pu = cast<MTPlaceUpdate>(g_MTConn.pendingUpdates[ei]);
+                    if (pu is null || pu.mb is null) continue;
+                    if (pu.mb.terrains.Length == 0 || pu.mb.blocks.Length > 0 || pu.mb.items.Length > 0) continue;
+                    for (uint rj = 0; rj < g_RecentLocalTerrainDiffs.Length; rj++) {
+                        if (AreMacroblockSpecsEq(g_RecentLocalTerrainDiffs[rj], pu.mb)) {
+                            log_debug("dropping own terrain-diff echo (" + pu.mb.terrains.Length + " cells)");
+                            g_MTConn.pendingUpdates.RemoveAt(uint(ei));
+                            g_RecentLocalTerrainDiffs.RemoveAt(rj);
+                            ei--;
+                            break;
+                        }
+                    }
+                }
             }
 
             auto nbPendingUpdates = Math::Clamp(g_MTConn.pendingUpdates.Length, 0, 50);
@@ -392,22 +419,6 @@ namespace Editor {
                     Editor_CachePosInUndoStack(editor);
                     g_MTConn.pendingUpdates.RemoveAt(0);
                     log_trace("cacheAutosavedIx: " + cacheAutosavedIx);
-                }
-            }
-
-            // The echo of our own terrain diff needs no undo dance either: the
-            // cells are already applied locally and there is no editor action
-            // behind it (so the autosave-index gate above can never match it).
-            // Dancing anyway editor-undoes recent local actions and replays
-            // them, which used to strip their terraform.
-            if (!skipNormalProcessing && S_EnablePlacementOptmization_Skip1TrivialMine && nbPendingUpdates == 1) {
-                auto tUpdate = cast<MTPlaceUpdate>(g_MTConn.pendingUpdates[0]);
-                if (tUpdate !is null && tUpdate.mb.blocks.Length == 0 && tUpdate.mb.items.Length == 0
-                    && tUpdate.mb.terrains.Length > 0
-                    && AreMacroblockSpecsEq(g_LastLocalTerrainDiff, tUpdate.mb)) {
-                    log_debug("skipping normal processing: trivial terrain diff");
-                    skipNormalProcessing = true;
-                    g_MTConn.pendingUpdates.RemoveAt(0);
                 }
             }
 
