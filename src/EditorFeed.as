@@ -4,6 +4,8 @@ bool g_DropMsgsTemp = false;
 // the async terrain apply to settle before diffing + broadcasting.
 const uint64 TERRAIN_DIFF_DEBOUNCE_MS = 1200;
 uint64 g_TerrainDirtyAt = 0;
+// last terrain diff we broadcast; its echo needs no undo dance (see below)
+Editor::MacroblockSpec@ g_LastLocalTerrainDiff;
 
 #if DEPENDENCY_EDITOR
 
@@ -250,13 +252,25 @@ namespace Editor {
                 g_TerrainDirtyAt = Time::Now;
                 Editor::ClearTerrainDirty();
             }
+            if (g_TerrainDirtyAt != 0 && Time::Now - g_TerrainDirtyAt > TERRAIN_DIFF_DEBOUNCE_MS && Editor::IsTerrainResyncPending()) {
+                // a replayed remote terraform is still settling; its snapshot
+                // resync will fold these changes in — re-arm rather than
+                // broadcasting someone else's edit back at them. (Local edits
+                // made inside this ~2s window are folded in too: a known,
+                // bounded blind spot.)
+                g_TerrainDirtyAt = Time::Now;
+            }
             if (g_TerrainDirtyAt != 0 && Time::Now - g_TerrainDirtyAt > TERRAIN_DIFF_DEBOUNCE_MS) {
                 g_TerrainDirtyAt = 0;
                 auto terrainDiff = Editor::GetTerrainDiffSpec();
                 if (terrainDiff !is null && terrainDiff.terrains.Length > 0) {
                     log_info("sending terrain diff: " + terrainDiff.terrains.Length + " cells");
                     g_MTConn.WritePlaced(terrainDiff);
-                    myUpdateStack.InsertLast(MTPlaceUpdate(terrainDiff));
+                    @g_LastLocalTerrainDiff = terrainDiff;
+                    // deliberately NOT pushed onto myUpdateStack: terrain diffs
+                    // are sync bookkeeping, and a Ctrl+Z virtual-undo of one
+                    // resets the cells to collection default (not their prior
+                    // state), eating the user's undo press to destroy terrain.
                     reportUpdates = true;
                 }
             }
@@ -313,6 +327,22 @@ namespace Editor {
                     Editor_CachePosInUndoStack(editor);
                     g_MTConn.pendingUpdates.RemoveAt(0);
                     log_trace("cacheAutosavedIx: " + cacheAutosavedIx);
+                }
+            }
+
+            // The echo of our own terrain diff needs no undo dance either: the
+            // cells are already applied locally and there is no editor action
+            // behind it (so the autosave-index gate above can never match it).
+            // Dancing anyway editor-undoes recent local actions and replays
+            // them, which used to strip their terraform.
+            if (!skipNormalProcessing && S_EnablePlacementOptmization_Skip1TrivialMine && nbPendingUpdates == 1) {
+                auto tUpdate = cast<MTPlaceUpdate>(g_MTConn.pendingUpdates[0]);
+                if (tUpdate !is null && tUpdate.mb.blocks.Length == 0 && tUpdate.mb.items.Length == 0
+                    && tUpdate.mb.terrains.Length > 0
+                    && AreMacroblockSpecsEq(g_LastLocalTerrainDiff, tUpdate.mb)) {
+                    log_debug("skipping normal processing: trivial terrain diff");
+                    skipNormalProcessing = true;
+                    g_MTConn.pendingUpdates.RemoveAt(0);
                 }
             }
 
