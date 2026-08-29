@@ -31,7 +31,10 @@ void DrawRoomMenuChoiceMain() {
     }
     bool serverChanged = preServer != m_CurrServer;
     if (serverChanged) {
-        if (m_RoomId.Length == 9) m_RoomId = m_RoomId.SubStr(3);
+        // Drop any prefix, otherwise the join form reads it back next frame and
+        // snaps the server straight back to the one in the room ID. (The old
+        // length==9 check also missed "DEV_" ids, which are 10 chars.)
+        m_RoomId = GetRoomIdNoServer(m_RoomId);
     }
 
     if (g_MenuState == MenuState::None) {
@@ -165,7 +168,7 @@ void ConnectToMapTogether_FreshMap() {
         @g_MTConn = null;
     }
     bool m_saveToDisk = Meta::IsDeveloperMode();
-    @g_MTConn = MapTogetherConnection(m_Password, false, m_newRoomActionLimit, m_Size, m_Mood | m_Base, m_Car, CalcRulesFlagFromForm(), m_ItemMaxSize, m_PlayerLimit, m_saveToDisk);
+    @g_MTConn = MapTogetherConnection(m_Password, false, m_newRoomActionLimit, m_Size, EncodeMapBaseByte(m_Base, m_Mood, m_Env), m_Car, CalcRulesFlagFromForm(), m_ItemMaxSize, m_PlayerLimit, m_saveToDisk);
     // give a little time for the auth request to fire off
     yield(3);
     startnew(OnNewRoom_EditorOpenNewMap);
@@ -186,7 +189,7 @@ void InviteToMapTogetherRoom_ExistingMap() {
         @g_MTConn = null;
     }
     bool m_saveToDisk = Meta::IsDeveloperMode();
-    @g_MTConn = MapTogetherConnection(m_Password, true, m_newRoomActionLimit, m_Size, m_Mood | m_Base, m_Car, CalcRulesFlagFromForm(), m_ItemMaxSize, m_PlayerLimit, m_saveToDisk);
+    @g_MTConn = MapTogetherConnection(m_Password, true, m_newRoomActionLimit, m_Size, EncodeMapBaseByte(m_Base, m_Mood, m_Env), m_Car, CalcRulesFlagFromForm(), m_ItemMaxSize, m_PlayerLimit, m_saveToDisk);
 }
 
 void InviteToMapTogetherRoom_ExistingMap_Puzzle() {
@@ -239,7 +242,7 @@ void DrawRoomJoinForm(bool allowLoadExisting = false, bool isPuzzle = false) {
         return;
     }
     UI::SetNextItemWidth(200);
-    m_RoomId = UI::InputText("Room ID", m_RoomId);
+    m_RoomId = NormalizeRoomId(UI::InputText("Room ID", m_RoomId));
     bool pwChanged;
     UI::SetNextItemWidth(200);
     m_Password = UI::InputText("Password (Optional)##joinroom", m_Password, pwChanged, UI::InputTextFlags::Password);
@@ -269,30 +272,61 @@ void DrawRoomJoinForm(bool allowLoadExisting = false, bool isPuzzle = false) {
     }
     UI::EndDisabled();
     if (badRoomIdLen) {
-        UI::TextWrapped("Room ID must be 6 characters long. (or 9 with server prefix)");
+        UI::TextWrapped("Room ID must be 6 characters long, optionally with a server prefix (e.g. AU_, DE_, US_).");
     }
+}
+
+// Canonical room-ID server prefixes, indexed by MTServers. This is the single
+// source of truth: every prefix helper below derives from it. Matching is
+// case-insensitive (people paste out of chat) but we always write capitals.
+const string[] ROOM_ID_PREFIXES = {"AU", "DE", "US", "DEV"};
+
+string ServerToRoomIdPrefix(MTServers server) {
+    uint i = uint(server);
+    if (i >= ROOM_ID_PREFIXES.Length) return "DE";
+    return ROOM_ID_PREFIXES[i];
+}
+
+// Length of the server prefix (including the underscore), or 0 if there is
+// none. Sets `server` to the matched server, else leaves it at De.
+uint RoomIdPrefixLen(const string &in roomId, MTServers &out server) {
+    server = MTServers::De;
+    string upper = roomId.ToUpper();
+    for (uint i = 0; i < ROOM_ID_PREFIXES.Length; i++) {
+        // The underscore disambiguates DE_ from DEV_, so order does not matter.
+        string p = ROOM_ID_PREFIXES[i] + "_";
+        if (upper.StartsWith(p)) {
+            server = MTServers(i);
+            return p.Length;
+        }
+    }
+    return 0;
 }
 
 bool RoomIdHasServerPrefix(const string &in roomId) {
-    return roomId.StartsWith("Au_") || roomId.StartsWith("De_") || roomId.StartsWith("Us_") || roomId.StartsWith("Dev_");
+    MTServers ignored;
+    return RoomIdPrefixLen(roomId, ignored) > 0;
 }
 
 string GetRoomIdNoServer(const string &in roomId) {
-    if (roomId.StartsWith("Au_") || roomId.StartsWith("De_") || roomId.StartsWith("Us_")) {
-        return roomId.SubStr(3);
-    }
-    if (roomId.StartsWith("Dev_")) {
-        return roomId.SubStr(4);
-    }
-    return roomId;
+    MTServers ignored;
+    return roomId.SubStr(RoomIdPrefixLen(roomId, ignored));
 }
 
 MTServers ServerFromRoomId(const string &in roomId) {
-    if (roomId.StartsWith("Au_")) return MTServers::Au;
-    if (roomId.StartsWith("De_")) return MTServers::De;
-    if (roomId.StartsWith("Us_")) return MTServers::Us;
-    if (roomId.StartsWith("Dev_")) return MTServers::Dev;
-    return MTServers::De;
+    MTServers server;
+    RoomIdPrefixLen(roomId, server);
+    return server;
+}
+
+// Tidy up a typed/pasted room ID: drop surrounding whitespace and rewrite any
+// server prefix in canonical capitals ("au_abc123" -> "AU_abc123").
+string NormalizeRoomId(const string &in roomId) {
+    string id = roomId.Trim();
+    MTServers server;
+    uint prefixLen = RoomIdPrefixLen(id, server);
+    if (prefixLen == 0) return id;
+    return ServerToRoomIdPrefix(server) + "_" + id.SubStr(prefixLen);
 }
 
 
@@ -321,8 +355,9 @@ void OnJoinRoom_EditorOpenNewMap() {
         // todo: support more map bases; bit flags (high) after
         auto base = g_MTConn.mapBase >= 32 ? MapBase(g_MTConn.mapBase & 0b11100000) : MapBase::Stadium155;
         auto mood = g_MTConn.mapBase & 3;
+        auto env = EncodedMapBaseToEnv(g_MTConn.mapBase);
         auto car = g_MTConn.baseCar;
-        EditNewMapFrom(base, MapMood(mood), MapCar(car), size);
+        EditNewMapFrom(base, MapMood(mood), MapCar(car), size, MapEnvToCollection(env));
     } else {
         NotifyError("Failed to join room");
     }
@@ -335,10 +370,24 @@ void OnNewRoom_EditorOpenNewMap() {
     auto base = m_Base;
     auto car = m_Car;
     auto mood = m_Mood;
-    EditNewMapFrom(base, mood, car, size);
+    EditNewMapFrom(base, mood, car, size, MapEnvToCollection(m_Env));
 }
 
-string BaseAndMoodToDecoId(MapBase base, MapMood mood) {
+string MoodToDecoSuffix(MapMood mood) {
+    switch (mood) {
+        case MapMood::Day: return "Day";
+        case MapMood::Night: return "Night";
+        case MapMood::Sunset: return "Sunset";
+        case MapMood::Sunrise: return "Sunrise";
+    }
+    return "Day";
+}
+
+string BaseAndMoodToDecoId(MapBase base, MapMood mood, const string &in environment = "Stadium") {
+    // Non-Stadium environments have exactly one base, in 4 moods.
+    if (environment != "Stadium") {
+        return "Base64x64" + MoodToDecoSuffix(mood);
+    }
     switch (base) {
         case MapBase::NoStadium:
             switch (mood) {

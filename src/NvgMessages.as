@@ -179,8 +179,9 @@ class StatusMsgUI {
 
 vec2 GameEventsTopLeft {
     get {
-        float h = Draw::GetHeight();
-        float w = Draw::GetWidth();
+        vec2 screen = ScreenSize();
+        float h = screen.y;
+        float w = screen.x;
         float hOffset = 0;
         float idealWidth = 1.7777777777777777 * h;
         if (w < idealWidth) {
@@ -189,7 +190,7 @@ vec2 GameEventsTopLeft {
             h = newH;
         }
         if (UI::IsOverlayShown()) hOffset += 24;
-        float wOffset = (float(Draw::GetWidth()) - (1.7777777777777777 * h)) / 2.;
+        float wOffset = (screen.x - (1.7777777777777777 * h)) / 2.;
         vec2 tl = vec2(wOffset, hOffset) + vec2(h * 0.15, w * 0.025);
         return tl;
     }

@@ -55,13 +55,18 @@ void Main() {
 
 #if DEV
     // test importing editor functions
-    print("PosToCoord: " + Editor::PosToCoord(vec3(123, 234, 345)).ToString());
+    print("PosToCoord: " + Editor::PosToCoord(vec3(123, 234, 345), vec2(32, 8), 64).ToString());
     print("EulerToMat: ");
     auto m = Editor::EulerToMat(vec3(2));
     print("PitchYawRollFromRotationMatrix: ");
     auto e = Editor::PitchYawRollFromRotationMatrix(m);
     print("Vec3ToNat3: " + Editor::Vec3ToNat3(vec3(4)).ToString());
     print("MTCoordToPos: " + Editor::MTCoordToPos(vec3(5)).ToString());
+#endif
+#if DEV && DEPENDENCY_EDITOR
+    // Openplanet's [Test] runner only fires from the UI, so drive the same
+    // registry on load too. See src/TestKit.as.
+    RunSelfChecks();
 #endif
 }
 
@@ -97,8 +102,16 @@ float stdTriHeight;
 float textPad;
 
 
+vec2 ScreenSize() {
+    auto app = GetApp();
+    if (app !is null && app.Viewport !is null && app.Viewport.SystemWindow !is null) {
+        return vec2(app.Viewport.SystemWindow.SizeX, app.Viewport.SystemWindow.SizeY);
+    }
+    return vec2(1920, 1080);
+}
+
 void UpdateGraphicsValues() {
-    g_screen = vec2(Draw::GetWidth(), Draw::GetHeight());
+    g_screen = ScreenSize();
     refScale = g_screen.y / referenceHeight;
     playerLabelBaseHeight = S_PlayerLabelHeight * refScale;
     stdTriHeight = playerLabelBaseHeight * 0.8;
@@ -117,6 +130,11 @@ bool IsOpenplanetOverlayShown;
 void RenderEarly() {
     // if (g_MTConn is null) return;
     UpdateGraphicsValues();
+    UpdateSessionFlags();
+    SetCachedCurrActionMap(UI::CurrentActionMap());
+}
+
+void UpdateSessionFlags() {
     IsOpenplanetOverlayShown = UI::IsOverlayShown();
     auto app = GetApp();
     if (app.Switcher.ModuleStack.Length > 0) {
@@ -137,7 +155,6 @@ void RenderEarly() {
     }
     IsLoading = app.LoadProgress.State == NGameLoadProgress::EState::Displayed;
     IsMenuDialogShown = app.BasicDialogs.Dialogs.CurrentFrame !is null;
-    SetCachedCurrActionMap(UI::CurrentActionMap());
 }
 
 void SetCachedCurrActionMap(const string &in actionMap) {

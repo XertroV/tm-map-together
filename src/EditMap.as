@@ -13,25 +13,38 @@ void EditNewMapFrom(MapBase base, MapMood mood, MapCar vehicle, nat3 size, const
         yield();
     }
 
-    auto decoId = BaseAndMoodToDecoId(base, mood);
-    auto fid = Fids::GetGame("GameData/Stadium/GameCtnDecoration/" + decoId + ".Decoration.Gbx");
+    bool isStadium = environment == "Stadium";
+    auto decoId = BaseAndMoodToDecoId(base, mood, environment);
+    auto fid = Fids::GetGame("GameData/" + environment + "/GameCtnDecoration/" + decoId + ".Decoration.Gbx");
     auto deco = cast<CGameCtnDecoration>(Fids::Preload(fid));
     string decoNodIdName;
     if (deco is null) {
         log_warn("deco is null");
+        if (!isStadium) {
+            NotifyError("Failed to load decoration " + decoId + " for environment " + environment);
+            return;
+        }
         decoNodIdName = "48x48Screen155Day";
     } else {
         @decoEditMap = deco;
         deco.MwAddRef();
-        // decoNodIdName = deco.IdName;
         decoOrigSize.x = deco.DecoSize.SizeX;
         decoOrigSize.y = deco.DecoSize.SizeY;
         decoOrigSize.z = deco.DecoSize.SizeZ;
         deco.DecoSize.SizeX = size.x;
         deco.DecoSize.SizeY = size.y;
         deco.DecoSize.SizeZ = size.z;
-        startnew(SwapDecoHack);
-        decoNodIdName = "48x48Screen155Day";
+        if (isStadium) {
+            // Stadium only accepts the standard deco nod name, so swap our deco
+            // in behind that fid for the duration of the load.
+            startnew(SwapDecoHack);
+            decoNodIdName = "48x48Screen155Day";
+        } else {
+            // Other environments resolve their own nod IdName directly -- and it
+            // is not derivable from the file name: RedIsland/WhiteShore are
+            // "Day"/"Night"/..., GreenCoast/BlueBay are "Day64"/"Night64"/....
+            decoNodIdName = deco.IdName;
+        }
     }
 
     yield();

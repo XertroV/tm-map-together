@@ -12,16 +12,24 @@ namespace EditorPatches {
         return _applied == Editor::InvPatchType::SkipClubEntirely;
     }
     void set_DisableClubItems_IsApplied(bool value) {
-        Editor::NextEditorLoad_EnableInventoryPatch(value ? Editor::InvPatchType::SkipClubEntirely : Editor::InvPatchType::None);
-        _applied = Editor::InvPatchType::SkipClubEntirely;
+        if (value) {
+            Editor::NextEditorLoad_EnableInventoryPatch(Editor::InvPatchType::SkipClubEntirely);
+            _applied = Editor::InvPatchType::SkipClubEntirely;
+        } else if (_applied == Editor::InvPatchType::SkipClubEntirely) {
+            UnapplyAny();
+        }
     }
 
     bool get_SkipClubFavItemUpdate_IsApplied() {
         return _applied == Editor::InvPatchType::SkipClubUpdateCheck;
     }
     void set_SkipClubFavItemUpdate_IsApplied(bool value) {
-        Editor::NextEditorLoad_EnableInventoryPatch(value ? Editor::InvPatchType::SkipClubUpdateCheck : Editor::InvPatchType::None);
-        _applied = Editor::InvPatchType::SkipClubUpdateCheck;
+        if (value) {
+            Editor::NextEditorLoad_EnableInventoryPatch(Editor::InvPatchType::SkipClubUpdateCheck);
+            _applied = Editor::InvPatchType::SkipClubUpdateCheck;
+        } else if (_applied == Editor::InvPatchType::SkipClubUpdateCheck) {
+            UnapplyAny();
+        }
     }
 }
 

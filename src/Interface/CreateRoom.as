@@ -8,6 +8,8 @@ bool m_AllowSelectionCut = false;
 MapMood m_Mood = MapMood::Day;
 [Setting category="normally hidden" name="saved base"]
 MapBase m_Base = MapBase::Stadium155;
+[Setting category="normally hidden" name="saved environment"]
+MapEnv m_Env = MapEnv::Stadium;
 [Setting category="normally hidden" name="saved car"]
 MapCar m_Car = MapCar::CarSport;
 
@@ -45,7 +47,8 @@ void DrawCreateRoomForm_InviteToRoom() {
         UI::Text("\\$f40Error: you need to be in the map editor.");
     }
     m_Mood = MapDecoToMood(editor.Challenge.Decoration);
-    m_Base = MapDecoToBase(editor.Challenge.Decoration);
+    m_Env = MapToEnv(editor.Challenge);
+    m_Base = m_Env == MapEnv::Stadium ? MapDecoToBase(editor.Challenge.Decoration) : MapBase::Stadium155;
     // if (m_Base != MapBase::Stadium155) {
     //     UI::Text("\\$f84Error: only Stadium 155 is supported for now. Mappers will load Stadium 155 unless joining from an existing map.");
     //     m_Base = MapBase::Stadium155;
@@ -89,15 +92,55 @@ MapMood MapDecoToMood(CGameCtnDecoration@ deco) {
 }
 
 
+// map_base layout: mood in bits 0-1, environment in bits 2-4, base in bits 5-7.
+const uint8 MAP_ENV_MASK = 0x1C;
+const uint8 MAP_ENV_SHIFT = 2;
+
 MapBase EncodedMapBaseToName(uint8 enc) {
-    if (enc == 32) return MapBase::NoStadium;
-    if (enc == 64) return MapBase::StadiumOld;
-    if (enc == 128) return MapBase::Stadium155;
+    // base lives in the high 3 bits; mood (0-1) and env (2-4) share the byte
+    uint8 baseBits = enc & 0xE0;
+    if (baseBits == 32) return MapBase::NoStadium;
+    if (baseBits == 64) return MapBase::StadiumOld;
+    if (baseBits == 128) return MapBase::Stadium155;
     return MapBase::Stadium155;
 }
 
 MapMood EncodedMapBaseToMood(uint8 enc) {
     return MapMood(enc & 3);
+}
+
+MapEnv EncodedMapBaseToEnv(uint8 enc) {
+    return MapEnv((enc & MAP_ENV_MASK) >> MAP_ENV_SHIFT);
+}
+
+uint8 EncodeMapBaseByte(MapBase base, MapMood mood, MapEnv env) {
+    return uint8(int(base) | int(mood) | (int(env) << MAP_ENV_SHIFT));
+}
+
+string MapEnvToCollection(MapEnv env) {
+    switch (env) {
+        case MapEnv::Stadium: return "Stadium";
+        case MapEnv::RedIsland: return "RedIsland";
+        case MapEnv::GreenCoast: return "GreenCoast";
+        case MapEnv::BlueBay: return "BlueBay";
+        case MapEnv::WhiteShore: return "WhiteShore";
+    }
+    NotifyWarning("MapEnvToCollection: Unknown environment: " + int(env));
+    return "Stadium";
+}
+
+MapEnv CollectionToMapEnv(const string &in collection) {
+    if (collection == "RedIsland") return MapEnv::RedIsland;
+    if (collection == "GreenCoast") return MapEnv::GreenCoast;
+    if (collection == "BlueBay") return MapEnv::BlueBay;
+    if (collection == "WhiteShore") return MapEnv::WhiteShore;
+    return MapEnv::Stadium;
+}
+
+// The environment of the map currently open in the editor.
+MapEnv MapToEnv(CGameCtnChallenge@ challenge) {
+    if (challenge is null) return MapEnv::Stadium;
+    return CollectionToMapEnv(challenge.CollectionName);
 }
 
 MapBase MapDecoToBase(CGameCtnDecoration@ deco) {
@@ -211,7 +254,22 @@ void DrawCreateRoomForm_BottomPart_Mutable() {
         UI::EndCombo();
     }
 
-    // Base
+    // Environment
+    if (UI::BeginCombo("Map Environment", MapEnvToString(m_Env))) {
+        for (int i = 0; i <= int(MapEnv::WhiteShore); i++) {
+            auto env = MapEnv(i);
+            if (UI::Selectable(MapEnvToString(env), m_Env == env) && m_Env != env) {
+                m_Env = env;
+                // Custom environments are natively 64x64; Stadium is 48x48.
+                m_Size.x = env == MapEnv::Stadium ? 48 : 64;
+                m_Size.z = m_Size.x;
+            }
+        }
+        UI::EndCombo();
+    }
+
+    // Base (Stadium only; other environments have a single 64x64 base)
+    UI::BeginDisabled(m_Env != MapEnv::Stadium);
     if (UI::BeginCombo("Map Base", tostring(m_Base))) {
         if (UI::Selectable("No Stadium", m_Base == MapBase::NoStadium)) {
             m_Base = MapBase::NoStadium;
@@ -224,6 +282,7 @@ void DrawCreateRoomForm_BottomPart_Mutable() {
         }
         UI::EndCombo();
     }
+    UI::EndDisabled();
 
     // Car
     if (UI::BeginCombo("Map Car", tostring(m_Car))) {
@@ -315,6 +374,17 @@ string MapBaseToString(MapBase base) {
     return "Unknown";
 }
 
+string MapEnvToString(MapEnv env) {
+    switch (env) {
+        case MapEnv::Stadium: return "Stadium";
+        case MapEnv::RedIsland: return "Red Island";
+        case MapEnv::GreenCoast: return "Green Coast";
+        case MapEnv::BlueBay: return "Blue Bay";
+        case MapEnv::WhiteShore: return "White Shore";
+    }
+    return "Unknown";
+}
+
 string MapCarToString(MapCar car) {
     switch (car) {
         case MapCar::CarSport: return "Default (Stadium)";
@@ -327,7 +397,8 @@ string MapCarToString(MapCar car) {
 
 void DrawCreateRoomForm_BottomPart_Immutable(MapMood mood, MapBase base, MapCar car, nat3 size) {
     UI::Text("Map Mood: " + tostring(mood));
-    UI::Text("Map Base: " + MapBaseToString(base));
+    UI::Text("Map Environment: " + MapEnvToString(m_Env));
+    if (m_Env == MapEnv::Stadium) UI::Text("Map Base: " + MapBaseToString(base));
     UI::Text("Map Car: " + MapCarToString(car));
     UI::Text("Map Size: " + size.ToString());
     m_Size = size;

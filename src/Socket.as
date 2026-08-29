@@ -40,6 +40,7 @@ class MapTogetherConnection {
     uint16 playerLimit;
     MapBase mapBaseName;
     MapMood mapBaseMood;
+    MapEnv mapBaseEnv;
 
     // if true, we have some special rules around room initialization
     bool isPuzzle;
@@ -253,7 +254,7 @@ class MapTogetherConnection {
     }
 
     string RoomIdWithServer() {
-        return tostring(server) + "_" + roomId;
+        return ServerToRoomIdPrefix(server) + "_" + roomId;
     }
 
     bool get_IsConnected() {
@@ -312,6 +313,7 @@ class MapTogetherConnection {
         log_info("Read map base: " + mapBase);
         mapBaseName = EncodedMapBaseToName(mapBase);
         mapBaseMood = EncodedMapBaseToMood(mapBase);
+        mapBaseEnv = EncodedMapBaseToEnv(mapBase);
         baseCar = socket.ReadUint8();
         log_info("Read base car: " + baseCar);
         rulesFlags = socket.ReadUint8();
@@ -326,7 +328,10 @@ class MapTogetherConnection {
         if (socket is null) return false;
         log_trace('Expecting OK response; waiting for available');
         while (!socket.IsHungUp() && socket.Available() < 3) yield();
-        if (socket.IsHungUp()) {
+        // check Available() before IsHungUp(): the server writes ERR + a message
+        // and then shuts down immediately, so the socket is usually already hung
+        // up with the error still buffered and perfectly readable.
+        if (socket.Available() < 3) {
             CloseWithErr("Server hung up");
             return false;
         }
@@ -338,7 +343,10 @@ class MapTogetherConnection {
         if (resp != "ERR") {
             CloseWithErr("Unexpected response from server: " + resp);
         } else {
-            auto msg = ReadLPString(socket);
+            // the message follows as a length-prefixed string; once hung up, all
+            // of it is already buffered.
+            while (!socket.IsHungUp() && socket.Available() < 2) yield();
+            auto msg = socket.Available() < 2 ? "(no message)" : ReadLPString(socket);
             CloseWithErr("Error from Server: " + msg);
         }
         return false;
@@ -380,8 +388,10 @@ class MapTogetherConnection {
         }
         log_info('Sent auth to server');
         // send version details VERSION_BYTES
+        // v6: map_base bits 2-4 carry the map environment. The server accepts v5
+        // too, but refuses v5 clients joining a non-Stadium room.
         socket.Write(uint8(0xFF));
-        socket.Write(uint8(0x05));
+        socket.Write(uint8(0x06));
         socket.Write(uint8(0x80));
     }
 
