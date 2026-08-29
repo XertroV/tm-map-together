@@ -32,6 +32,7 @@ void RegisterTerrainHooksOnce() {
     if (g_MTTerrainHooks !is null) return;
     @g_MTTerrainHooks = MTTerrainHooks();
     Editor::Callbacks::Exts::RegisterExtension(g_MTTerrainHooks);
+    log_info("registered E++ terrain hooks");
 }
 
 void KillTerrainHooks() {
@@ -44,7 +45,6 @@ void KillTerrainHooks() {
 
 
 void RunEditorFeedGenerator() {
-    RegisterTerrainHooksOnce();
     startnew(Editor::EditorFeedGen_Loop);
 }
 
@@ -110,6 +110,7 @@ namespace Editor {
     bool feed_hasSyncronized = false;
 
     void EditorFeedGen_Loop() {
+        RegisterTerrainHooksOnce();
         feedStart_WasYoloModeEnabled = S_YoloMode;
         feed_hasPlacedSomething = false;
         feed_hasPlacedSomethingTime = 0;
