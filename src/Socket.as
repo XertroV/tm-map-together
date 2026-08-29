@@ -372,7 +372,7 @@ class MapTogetherConnection {
         if (op_token.Length == 0) {
             // the server rejects empty tokens anyway; fail here so the error is
             // immediate and names the real cause instead of a handshake timeout
-            CloseWithErr("No Openplanet auth token (Auth::GetToken failed; unsigned/dev-loaded plugins can't refresh tokens)");
+            CloseWithErr("No Openplanet auth token after retries (transient Openplanet auth hiccup; reconnect to retry)");
             return;
         }
         g_ConnectionStage = ConnectionStage::ConnectingToServer;
