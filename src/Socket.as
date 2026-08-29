@@ -149,6 +149,7 @@ class MapTogetherConnection {
 
     // join a room
     MapTogetherConnection(const string &in roomId, const string &in password = "", bool _saveToDisk = false) {
+        server = m_CurrServer;
         remote_domain = ServerToEndpoint(m_CurrServer);
         log_info("Joining room on server: " + remote_domain);
         IS_CONNECTING = true;
