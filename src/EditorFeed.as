@@ -1,5 +1,10 @@
 bool g_DropMsgsTemp = false;
 
+// Terraform sync: when E++ flags the genealogy grid dirty, wait this long for
+// the async terrain apply to settle before diffing + broadcasting.
+const uint64 TERRAIN_DIFF_DEBOUNCE_MS = 1200;
+uint64 g_TerrainDirtyAt = 0;
+
 #if DEPENDENCY_EDITOR
 
 
@@ -109,6 +114,9 @@ namespace Editor {
 
         bool wasInPlayground = false;
         log_trace('[Loop] starting inner loop');
+        // baseline for terraform sync: we broadcast grid cells that differ
+        // from this snapshot (see the terrain-dirty block below)
+        Editor::RefreshTerrainSnapshot();
         while (app.Editor !is null) {
             if (dev_TraceEachLoop) log_trace("[Loop] start");
             wasInPlayground = false;
@@ -210,7 +218,7 @@ namespace Editor {
                     // set all items flying and block coord before sending
                     // this solves some problems placing them on free blocks
                     item.isFlying = 1;
-                    item.coord = PosToCoord(item.pos);
+                    item.coord = PosToCoord(item.pos, vec2(32, 8), 64);
 
                     if (S_PrintItemPlacingDebug) {
                         PrintItemSpecDebug(item);
@@ -231,6 +239,26 @@ namespace Editor {
                 reportUpdates = true;
             } else if (!S_EnableSettingSkins && setSkins.Length > 0) {
                 log_debug("ignoring " + setSkins.Length + " set skins");
+            }
+
+            // Terraform lands asynchronously (~1s) and terrain blocks never
+            // appear in the placement buffers, so E++ just flags the grid as
+            // dirty; debounce past the async apply, then broadcast the changed
+            // cells as a terrain-only place update. Remote terrain applies
+            // resync E++'s snapshot themselves, so they don't echo back here.
+            if (Editor::IsTerrainDirty()) {
+                g_TerrainDirtyAt = Time::Now;
+                Editor::ClearTerrainDirty();
+            }
+            if (g_TerrainDirtyAt != 0 && Time::Now - g_TerrainDirtyAt > TERRAIN_DIFF_DEBOUNCE_MS) {
+                g_TerrainDirtyAt = 0;
+                auto terrainDiff = Editor::GetTerrainDiffSpec();
+                if (terrainDiff !is null && terrainDiff.terrains.Length > 0) {
+                    log_info("sending terrain diff: " + terrainDiff.terrains.Length + " cells");
+                    g_MTConn.WritePlaced(terrainDiff);
+                    myUpdateStack.InsertLast(MTPlaceUpdate(terrainDiff));
+                    reportUpdates = true;
+                }
             }
 
             if (m_ShouldIgnoreNextAction) {
@@ -441,7 +469,7 @@ namespace Editor {
             if (missing[i].item !is null) {
                 auto item = missing[i].item;
                 item.isFlying = 1;
-                item.coord = PosToCoord(item.pos);
+                item.coord = PosToCoord(item.pos, vec2(32, 8), 64);
                 // trace('name: ' + item.name);
                 // trace('collection: ' + item.collection);
                 // trace('author: ' + item.author);
