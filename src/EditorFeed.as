@@ -249,6 +249,18 @@ namespace Editor {
             // cells as a terrain-only place update. Remote terrain applies
             // resync E++'s snapshot themselves, so they don't echo back here.
             if (Editor::IsTerrainDirty()) {
+                if (!Editor::IsTerrainResyncPending()) {
+                    // A local terrain edit just landed. It made editor-undo
+                    // entries but has no server update until the debounced diff
+                    // goes out, so an incoming echo's undo dance would rewind
+                    // it (resurrecting bulk-deleted terrain) with nothing in
+                    // the stream to replay it. Fold it into the confirmed
+                    // baseline immediately. (An unconfirmed block action whose
+                    // echo hasn't arrived yet gets folded in too and would be
+                    // re-applied on echo — near-idempotent, and the echo
+                    // usually beats the terraform by a wide margin.)
+                    Editor_CachePosInUndoStack(editor);
+                }
                 g_TerrainDirtyAt = Time::Now;
                 Editor::ClearTerrainDirty();
             }
