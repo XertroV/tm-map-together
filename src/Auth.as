@@ -16,6 +16,9 @@ const string CheckTokenUpdate() {
         } catch {
             log_warn("Got exception refreshing auth token: " + getExceptionInfo());
             g_opAuthToken = "";
+            // without this, every later connect hangs forever in the
+            // while(_IsRequestingAuthToken) wait above
+            _IsRequestingAuthToken = false;
         }
     }
     return g_opAuthToken;
