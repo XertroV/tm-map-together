@@ -141,3 +141,9 @@ for pluginSrc in ${pluginSources[@]}; do
 done
 
 _colortext16 green "✅ Done."
+
+if [[ "$_build_mode" == "dev" ]] && command -v tm-remote-build >/dev/null 2>&1; then
+  tm-remote-build load folder map-together -op OpenplanetNext \
+    && _colortext16 green "✅ Hot-reloaded map-together in game." \
+    || _colortext16 red "⚠ Hot reload failed (is TM running with remote build enabled?)"
+fi
