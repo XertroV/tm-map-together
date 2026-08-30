@@ -103,11 +103,7 @@ float textPad;
 
 
 vec2 ScreenSize() {
-    auto app = GetApp();
-    if (app !is null && app.Viewport !is null && app.Viewport.SystemWindow !is null) {
-        return vec2(app.Viewport.SystemWindow.SizeX, app.Viewport.SystemWindow.SizeY);
-    }
-    return vec2(1920, 1080);
+    return Display::GetSize();
 }
 
 void UpdateGraphicsValues() {

@@ -4,11 +4,21 @@ bool g_DropMsgsTemp = false;
 // matching echoes are dropped outright (see the echo filter in the feed loop)
 array<Editor::MacroblockSpec@> g_RecentLocalTerrainDiffs;
 
-// Hold the undo dance briefly after sending local placements: ground-block
-// terraform lands as an async engine job (~1s, longer unfocused), and the
-// dance's editor-undo kills pending jobs, leaving the sender's blocks bald.
-const uint64 DANCE_HOLD_AFTER_SEND_MS = 1500;
+// Hold the undo dance briefly after sending a ground-block placement: its
+// terraform commits within a frame or two, but until E++'s dirty ping
+// reaches us a dance would rewind the terraform, and the donor replay
+// can't restore it (nor would a diff ever fire), leaving the block bald
+// for everyone. Sized to cover a few frames even at unfocused frame rates.
+const uint64 DANCE_HOLD_AFTER_SEND_MS = 250;
 uint64 g_HoldDanceUntil = 0;
+
+bool MacroblockHasGroundBlock(Editor::MacroblockSpec@ mb) {
+    if (mb is null) return false;
+    for (uint i = 0; i < mb.Blocks.Length; i++) {
+        if (mb.Blocks[i].isGround) return true;
+    }
+    return false;
+}
 
 // Terraform sync: E++'s terrain hooks own the settle debounce + genealogy
 // grid diff (see MTTerrainHooks below); the callbacks only queue here and the
@@ -287,7 +297,9 @@ namespace Editor {
                     }
                 }
                 g_MTConn.WritePlaced(placeMb);
-                g_HoldDanceUntil = Time::Now + DANCE_HOLD_AFTER_SEND_MS;
+                if (MacroblockHasGroundBlock(placeMb)) {
+                    g_HoldDanceUntil = Time::Now + DANCE_HOLD_AFTER_SEND_MS;
+                }
                 if (!m_ShouldIgnoreNextAction) {
                     myUpdateStack.InsertLast(MTPlaceUpdate(placeMb));
                 } else {
