@@ -6,8 +6,7 @@ namespace MapTogether {
 
     Json::Value@ GetStatus() {
         UpdateSessionFlags();
-        auto o = Json::Object();
-        o["ok"] = true;
+        auto o = Ok();
         o["inMainMenu"] = IsInMainMenu;
         o["inEditor"] = IsInEditor;
         o["inSubEditor"] = IsInSubEditor;
@@ -162,7 +161,7 @@ namespace MapTogether {
             }
             yield();
         }
-        return Fail("wait loop exited unexpectedly");
+        return Fail("unreachable"); // compiler requires a return after while(true)
     }
 
     Json::Value@ WaitUntilIdle(Json::Value &in opts) {
@@ -183,7 +182,7 @@ namespace MapTogether {
             }
             yield();
         }
-        return Fail("wait loop exited unexpectedly");
+        return Fail("unreachable"); // compiler requires a return after while(true)
     }
 
     Json::Value@ GetPlayers(Json::Value &in opts) {
@@ -194,8 +193,7 @@ namespace MapTogether {
         for (uint i = 0; i < src.Length; i++) {
             players.Add(PlayerToJson(src[i]));
         }
-        auto o = Json::Object();
-        o["ok"] = true;
+        auto o = Ok();
         o["players"] = players;
         o["count"] = int(src.Length);
         return o;
@@ -210,8 +208,7 @@ namespace MapTogether {
         ChatMsgTy ty;
         if (!ParseChatType(JsonStr(opts, "type", "room"), ty, tyErr)) return Fail(tyErr);
         g_MTConn.SendChatMessage(ty, msg);
-        auto o = Json::Object();
-        o["ok"] = true;
+        auto o = Ok();
         o["sent"] = true;
         o["type"] = ChatTypeName(ty);
         o["length"] = int(msg.Length);
@@ -228,8 +225,7 @@ namespace MapTogether {
         for (uint i = start; i < msgs.Length; i++) {
             arr.Add(ChatToJson(msgs[i]));
         }
-        auto o = Json::Object();
-        o["ok"] = true;
+        auto o = Ok();
         o["messages"] = arr;
         o["count"] = int(arr.Length);
         o["total"] = int(msgs.Length);
@@ -242,8 +238,7 @@ namespace MapTogether {
         if (p is null) return Fail("player not found");
         bool lockCam = JsonBool(opts, "lock", false);
         p.FocusEditorCamera(lockCam);
-        auto o = Json::Object();
-        o["ok"] = true;
+        auto o = Ok();
         o["focused"] = p.name;
         o["locked"] = lockCam;
         return o;
@@ -251,8 +246,7 @@ namespace MapTogether {
 
     Json::Value@ UnlockCamera(Json::Value &in opts) {
         UnlockEditorCamera();
-        auto o = Json::Object();
-        o["ok"] = true;
+        auto o = Ok();
         o["unlocked"] = true;
         return o;
     }
@@ -276,16 +270,14 @@ namespace MapTogether {
         bool was = g_DropMsgsTemp;
         g_DropMsgsTemp = drop;
         if (drop && !was) startnew(OnEnabled_DropMsgsTemp);
-        auto o = Json::Object();
-        o["ok"] = true;
+        auto o = Ok();
         o["dropPendingUpdates"] = g_DropMsgsTemp;
         return o;
     }
 
     Json::Value@ ClearPurpleBoxes(Json::Value &in opts) {
         OnClick_ClearPurpleBoxes();
-        auto o = Json::Object();
-        o["ok"] = true;
+        auto o = Ok();
         o["cleared"] = true;
         return o;
     }
@@ -326,8 +318,7 @@ namespace MapTogether {
                 arr.Add(RecentRooms[i]);
             }
         }
-        auto o = Json::Object();
-        o["ok"] = true;
+        auto o = Ok();
         o["rooms"] = arr;
         o["count"] = int(arr.Length);
         return o;
@@ -350,8 +341,7 @@ namespace MapTogether {
             }
             startnew(CheckDesyncAgainSoon);
         }
-        auto o = Json::Object();
-        o["ok"] = true;
+        auto o = Ok();
         o["fix"] = fix;
         o["extra"] = Editor::desyncLastExtra is null ? -1 : int(Editor::desyncLastExtra.Length);
         o["missing"] = Editor::desyncLastMissing is null ? -1 : int(Editor::desyncLastMissing.Length);
@@ -369,8 +359,7 @@ namespace MapTogether {
         auto upd = log[uint(idx)];
         if (upd is null) return Fail("update is null");
         g_MTConn.WriteUpdate(upd.Invese());
-        auto o = Json::Object();
-        o["ok"] = true;
+        auto o = Ok();
         o["index"] = idx;
         o["summary"] = upd.SummaryText;
         return o;
@@ -382,8 +371,7 @@ namespace MapTogether {
         AddServer(arr, MTServers::De);
         AddServer(arr, MTServers::Us);
         AddServer(arr, MTServers::Dev);
-        auto o = Json::Object();
-        o["ok"] = true;
+        auto o = Ok();
         o["servers"] = arr;
         o["current"] = ServerKey(m_CurrServer);
         return o;
@@ -522,19 +510,24 @@ namespace MapTogether {
             m_Size.y = ClampDim(uint(int(opts["size"][1])));
             m_Size.z = ClampDim(uint(int(opts["size"][2])));
         } else {
-            if (opts.HasKey("sizeX") || opts.HasKey("x")) m_Size.x = ClampDim(JsonUint(opts, opts.HasKey("sizeX") ? "sizeX" : "x", m_Size.x));
-            if (opts.HasKey("sizeY") || opts.HasKey("y")) m_Size.y = ClampDim(JsonUint(opts, opts.HasKey("sizeY") ? "sizeY" : "y", m_Size.y));
-            if (opts.HasKey("sizeZ") || opts.HasKey("z")) m_Size.z = ClampDim(JsonUint(opts, opts.HasKey("sizeZ") ? "sizeZ" : "z", m_Size.z));
+            m_Size.x = DimOpt(opts, "sizeX", "x", m_Size.x);
+            m_Size.y = DimOpt(opts, "sizeY", "y", m_Size.y);
+            m_Size.z = DimOpt(opts, "sizeZ", "z", m_Size.z);
         }
         m_SizeX = m_Size.x;
         m_SizeY = m_Size.y;
         m_SizeZ = m_Size.z;
     }
 
+    // dimension from `key` or its `alias`, clamped; `def` when neither is set
+    uint DimOpt(Json::Value@ opts, const string &in key, const string &in alias, uint def) {
+        if (opts.HasKey(key)) return ClampDim(JsonUint(opts, key, def));
+        if (opts.HasKey(alias)) return ClampDim(JsonUint(opts, alias, def));
+        return def;
+    }
+
     uint ClampDim(uint v) {
-        if (v < 8) return 8;
-        if (v > 255) return 255;
-        return v;
+        return uint(Math::Clamp(int(v), 8, 255));
     }
 
     bool ParseChatType(const string &in raw, ChatMsgTy &out ty, string &out err) {
@@ -570,6 +563,12 @@ namespace MapTogether {
         if (o is null || o.GetType() != Json::Type::Object || !o.HasKey(key)) return def;
         if (o[key].GetType() != Json::Type::Number) return def;
         return float(o[key]);
+    }
+
+    Json::Value@ Ok() {
+        auto o = Json::Object();
+        o["ok"] = true;
+        return o;
     }
 
     Json::Value@ Fail(const string &in error) {

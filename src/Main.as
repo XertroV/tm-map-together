@@ -55,7 +55,7 @@ void Main() {
 
 #if DEV
     // test importing editor functions
-    print("PosToCoord: " + Editor::PosToCoord(vec3(123, 234, 345), vec2(32, 8), 64).ToString());
+    print("PosToCoord: " + Editor::PosToCoord(vec3(123, 234, 345)).ToString());
     print("EulerToMat: ");
     auto m = Editor::EulerToMat(vec3(2));
     print("PitchYawRollFromRotationMatrix: ");

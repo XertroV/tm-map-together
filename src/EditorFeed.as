@@ -4,11 +4,9 @@ bool g_DropMsgsTemp = false;
 // matching echoes are dropped outright (see the echo filter in the feed loop)
 array<Editor::MacroblockSpec@> g_RecentLocalTerrainDiffs;
 
-// Hold the undo dance briefly after sending a ground-block placement: its
-// terraform commits within a frame or two, but until E++'s dirty ping
-// reaches us a dance would rewind the terraform, and the donor replay
-// can't restore it (nor would a diff ever fire), leaving the block bald
-// for everyone. Sized to cover a few frames even at unfocused frame rates.
+// Hold the undo dance briefly after sending a ground-block placement: until
+// E++'s dirty ping arrives (a frame or two; longer unfocused), a dance would
+// rewind the terraform and the donor replay can't restore it.
 const uint64 DANCE_HOLD_AFTER_SEND_MS = 250;
 uint64 g_HoldDanceUntil = 0;
 
@@ -290,7 +288,7 @@ namespace Editor {
                     // set all items flying and block coord before sending
                     // this solves some problems placing them on free blocks
                     item.isFlying = 1;
-                    item.coord = PosToCoord(item.pos, vec2(32, 8), 64);
+                    item.coord = PosToCoord(item.pos);
 
                     if (S_PrintItemPlacingDebug) {
                         PrintItemSpecDebug(item);
@@ -316,21 +314,13 @@ namespace Editor {
                 log_debug("ignoring " + setSkins.Length + " set skins");
             }
 
-            // Terraform lands asynchronously (~1s) and terrain blocks never
-            // appear in the placement buffers; E++'s terrain hooks own the
-            // settle debounce and the grid diff (remote applies resync the
-            // snapshot themselves, so they don't echo back through here).
+            // E++'s terrain hooks own the settle debounce + grid diff;
+            // terrain blocks never appear in the placement buffers.
             if (g_TerrainDirtyPing) {
                 g_TerrainDirtyPing = false;
-                // A local terrain edit just landed. It made editor-undo
-                // entries but has no server update until the settled diff
-                // goes out, so an incoming echo's undo dance would rewind
-                // it (resurrecting bulk-deleted terrain) with nothing in
-                // the stream to replay it. Fold it into the confirmed
-                // baseline immediately. (An unconfirmed block action whose
-                // echo hasn't arrived yet gets folded in too and would be
-                // re-applied on echo — near-idempotent, and the echo
-                // usually beats the terraform by a wide margin.)
+                // a local terrain edit made undo entries with no server update
+                // to replay them: fold into the confirmed baseline now so an
+                // echo's undo dance can't rewind it
                 Editor_CachePosInUndoStack(editor);
             }
             while (g_PendingTerrainDiffs.Length > 0) {
@@ -371,13 +361,10 @@ namespace Editor {
                 g_MTConn.pendingUpdates.RemoveRange(0, g_MTConn.pendingUpdates.Length);
             }
 
-            // Drop echoes of our own recent terrain diffs at ANY queue depth.
-            // An own echo carries nothing new (the cells are already live
-            // locally), and applying one forces the cells back to their
-            // capture-time state -- eating anything placed there since. With
-            // several diffs in flight a single-update trivial-skip never
-            // matches, so the stale echoes used to be applied one by one,
-            // razing fresh terrain square by square.
+            // Drop our own terrain-diff echoes at any queue depth: applying
+            // one rewinds the cells to their capture-time state (eating
+            // anything placed since), and with several diffs in flight the
+            // single-update trivial-skip never matches.
             if (g_RecentLocalTerrainDiffs.Length > 0) {
                 for (int ei = 0; ei < int(g_MTConn.pendingUpdates.Length); ei++) {
                     auto pu = cast<MTPlaceUpdate>(g_MTConn.pendingUpdates[ei]);
@@ -600,7 +587,7 @@ namespace Editor {
             if (missing[i].item !is null) {
                 auto item = missing[i].item;
                 item.isFlying = 1;
-                item.coord = PosToCoord(item.pos, vec2(32, 8), 64);
+                item.coord = PosToCoord(item.pos);
                 // trace('name: ' + item.name);
                 // trace('collection: ' + item.collection);
                 // trace('author: ' + item.author);

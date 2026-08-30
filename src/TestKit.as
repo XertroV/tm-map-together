@@ -112,7 +112,7 @@ namespace Tests {
         Reg("WaitUntilReadyFailsWhenIdle", MapTogether_WaitUntilReadyFailsWhenIdle);
         Reg("FailShape", MapTogether_FailShape);
         Reg("PlayerTestModeRoundTrip", MapTogether_PlayerTestModeRoundTrip);
-        Reg("VehicleMsgSerializationBench", MapTogether_VehicleMsgSerializationBench);
+        Reg("VehiclePosRoundTrip", MapTogether_VehiclePosRoundTrip);
     }
 
     // Drives the registry through `sink`. A test that throws is reported as a
