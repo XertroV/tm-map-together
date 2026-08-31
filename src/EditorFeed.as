@@ -700,7 +700,7 @@ namespace Editor {
     // handled by the replay layer rather than by send-time smearing.
     uint get_vehicleSampleEveryMs() {
         uint others = g_MTConn !is null ? g_MTConn.NbActiveVehicleSenders() : 0;
-        return uint(Math::Clamp(int(50 * (1 + others)), 50, 100));
+        return uint(Math::Clamp(int(15 * (1 + others)), 50, 100));
     }
 
     void CheckUpdateVehicle(CSmArenaClient@ pg) {
