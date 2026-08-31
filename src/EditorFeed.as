@@ -3,9 +3,9 @@ bool g_DropMsgsTemp = false;
 // recently broadcast terrain diffs; matching echoes are dropped in the feed loop.
 array<Editor::MacroblockSpec@> g_RecentLocalTerrainDiffs;
 
-// hold the undo dance after ground-block sends; dancing before E++'s dirty ping rewinds terraform the replay can't restore.
-const uint64 DANCE_HOLD_AFTER_SEND_MS = 250;
-uint64 g_HoldDanceUntil = 0;
+// hold the rebase after ground-block sends; rebasing before E++'s dirty ping rewinds terraform the replay can't restore.
+const uint64 REBASE_HOLD_AFTER_SEND_MS = 250;
+uint64 g_HoldRebaseUntil = 0;
 
 bool MacroblockHasGroundBlock(Editor::MacroblockSpec@ mb) {
     if (mb is null) return false;
@@ -279,7 +279,7 @@ namespace Editor {
                 }
                 g_MTConn.WritePlaced(placeMb);
                 if (MacroblockHasGroundBlock(placeMb)) {
-                    g_HoldDanceUntil = Time::Now + DANCE_HOLD_AFTER_SEND_MS;
+                    g_HoldRebaseUntil = Time::Now + REBASE_HOLD_AFTER_SEND_MS;
                 }
                 if (!m_ShouldIgnoreNextAction) {
                     myUpdateStack.InsertLast(MTPlaceUpdate(placeMb));
@@ -300,7 +300,7 @@ namespace Editor {
             // terrain never appears in placement buffers; E++'s hooks own settle + diff.
             if (g_TerrainDirtyPing) {
                 g_TerrainDirtyPing = false;
-                // local terrain edits have no replayable server update; fold into the confirmed baseline so a dance can't rewind them.
+                // local terrain edits have no replayable server update; fold into the confirmed baseline so a rebase can't rewind them.
                 Editor_CachePosInUndoStack(editor);
             }
             while (g_PendingTerrainDiffs.Length > 0) {
@@ -362,7 +362,7 @@ namespace Editor {
 
             // special case: the last update is the thing we just placed, and that's the only change
             bool skipNormalProcessing = false;
-            // +1 = user action, +0 = API place; both already hold the echo's content, and dancing would undo in-flight terraform.
+            // +1 = user action, +0 = API place; both already hold the echo's content, and rebasing would undo in-flight terraform.
             auto undoPosNow = Editor_GetCurrPosInUndoStack(editor);
             if (S_EnablePlacementOptmization_Skip1TrivialMine && nbPendingUpdates == 1
                 && (undoPosNow == cacheAutosavedIx + 1 || undoPosNow == cacheAutosavedIx)) {
@@ -390,9 +390,9 @@ namespace Editor {
                 }
             }
 
-            if (!skipNormalProcessing && nbPendingUpdates > 0 && Time::Now < g_HoldDanceUntil) {
-                // non-trivial updates during our own terraform: wait out the hold (dancing kills the async terrain job).
-                yield_why("holding dance for in-flight local terraform");
+            if (!skipNormalProcessing && nbPendingUpdates > 0 && Time::Now < g_HoldRebaseUntil) {
+                // non-trivial updates during our own terraform: wait out the hold (rebasing kills the async terrain job).
+                yield_why("holding rebase for in-flight local terraform");
                 continue;
             }
 
