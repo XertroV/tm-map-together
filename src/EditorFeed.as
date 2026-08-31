@@ -673,6 +673,7 @@ namespace Editor {
     }
 
     VehiclePos@ lastVehiclePos = VehiclePos();
+    VehicleSample@ lastVehicleSample = VehicleSample();
     uint lastUpdateVehicleCheck = 0;
     uint lastUpdateCursorCheck = 0;
     uint updateEveryMs {
@@ -693,17 +694,29 @@ namespace Editor {
         if (g_MTConn !is null) g_MTConn.WriteTestMode(on);
     }
 
+    // VehicleSample cadence: scales with players concurrently streaming
+    // samples (not room size), and deliberately has NO random jitter —
+    // samples are timestamped and the receiver buffers, so bursts are
+    // handled by the replay layer rather than by send-time smearing.
+    uint get_vehicleSampleEveryMs() {
+        uint others = g_MTConn !is null ? g_MTConn.NbActiveVehicleSenders() : 0;
+        return uint(Math::Clamp(int(50 * (1 + others)), 50, 100));
+    }
+
     void CheckUpdateVehicle(CSmArenaClient@ pg) {
-        // add some randomness to help break messages up so they don't all arrive at once
-        if (lastUpdateVehicleCheck + updateEveryMs + uint(Math::Rand(0, 200)) > uint(Time::Now)) return;
+        if (lastUpdateVehicleCheck + vehicleSampleEveryMs > uint(Time::Now)) return;
         if (pg is null || pg.GameTerminals.Length == 0) return;
         auto player = cast<CSmPlayer>(pg.GameTerminals[0].ControlledPlayer);
         if (player is null) return;
         CSceneVehicleVis@ vis = VehicleState::GetVis(pg.GameScene, player);
         if (vis is null) return;
-        if (lastVehiclePos.UpdateFromGame(vis)) {
+        if (lastVehicleSample.UpdateFromGame(vis)) {
             lastUpdateVehicleCheck = Time::Now;
-            g_MTConn.WriteVehiclePos(lastVehiclePos);
+            g_MTConn.WriteVehicleSample(lastVehicleSample);
+            // dual-send transition: live v5 peers can only parse VehiclePos
+            if (lastVehiclePos.UpdateFromGame(vis)) {
+                g_MTConn.WriteVehiclePos(lastVehiclePos);
+            }
         }
     }
 

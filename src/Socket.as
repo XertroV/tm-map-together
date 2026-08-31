@@ -505,6 +505,16 @@ class MapTogetherConnection {
         socket.Write(buf, buf.GetSize());
     }
 
+    void WriteVehicleSample(const VehicleSample@ sample) {
+        if (socket is null) return;
+        auto buf = MemoryBuffer();
+        sample.WriteToNetworkBuffer(buf);
+        buf.Seek(0);
+        socket.Write(uint8(MTUpdateTy::VehicleSample));
+        socket.Write(uint32(buf.GetSize()));
+        socket.Write(buf, buf.GetSize());
+    }
+
     void WritePlayerCamCursor(const PlayerCamCursor@ cursor) {
         if (socket is null) return;
         auto buf = MemoryBuffer();
@@ -576,6 +586,7 @@ class MapTogetherConnection {
                     || next.ty == MTUpdateTy::PlayerLeave
                     || next.ty == MTUpdateTy::PlayerCamCursor
                     || next.ty == MTUpdateTy::VehiclePos
+                    || next.ty == MTUpdateTy::VehicleSample
                     || next.ty == MTUpdateTy::Admin_SetActionLimit
                     || next.ty == MTUpdateTy::ChatMsg
                     || next.ty == MTUpdateTy::ServerStats
@@ -828,11 +839,37 @@ class MapTogetherConnection {
         for (uint i = 0; i < playersInRoom.Length; i++) {
             @player = playersInRoom[i];
             if (player.id == pos.meta.playerId) {
+                // dual-send transition: a v6 sender also sends VehicleSample;
+                // prefer that stream and ignore its legacy VehiclePos copies.
+                if (player.vehicleReplay.FreshWithin(Time::Now, 2000)) return;
                 player.lastUpdate = PlayerUpdateTy::Vehicle;
                 player.lastVehiclePos.UpdateFrom(pos);
                 return;
             }
         }
+    }
+
+    void UpdatePlayerVehicleSample(VehicleSample@ sample) {
+        PlayerInRoom@ player = FindPlayerEver(sample.meta.playerMwId.Value);
+        if (player is null) {
+            warn("unexpected: player not found: " + sample.meta.playerId);
+            return;
+        }
+        player.lastUpdate = PlayerUpdateTy::Vehicle;
+        player.vehicleReplay.Add(sample, Time::Now);
+    }
+
+    // Cadence input for the send side: how many players are actively
+    // streaming VehicleSamples right now (self is counted by the caller).
+    uint NbActiveVehicleSenders() {
+        uint n = 0;
+        uint64 now = Time::Now;
+        for (uint i = 0; i < playersInRoom.Length; i++) {
+            auto @p = playersInRoom[i];
+            if (p.isLocal) continue;
+            if (p.vehicleReplay.FreshWithin(now, 2000)) n++;
+        }
+        return n;
     }
 
     void UpdatePlayerTestMode(PlayerTestModeUpdate@ update) {
@@ -855,7 +892,11 @@ class MapTogetherConnection {
             if (p.lastUpdate == PlayerUpdateTy::Cursor) {
                 p.lastCamCursor.RenderNvg(p.name);
             } else if (p.lastUpdate == PlayerUpdateTy::Vehicle) {
-                p.lastVehiclePos.RenderNvg(p.name);
+                if (p.vehicleReplay.Count > 0) {
+                    p.vehicleReplay.RenderNvg(p.name, Time::Now);
+                } else {
+                    p.lastVehiclePos.RenderNvg(p.name);
+                }
             }
         }
     }
@@ -1025,6 +1066,7 @@ enum MTUpdateTy {
     Ping = 21,
     ServerStats = 22,
     PlayerTestMode = 23,
+    VehicleSample = 24,
     // not numbered yet
     // put new commands above this
     XXX_LAST
@@ -1057,6 +1099,7 @@ enum MTUpdateTy {
 
 PlayerCamCursor@ tmpPlayerCamCursor = PlayerCamCursor();
 VehiclePos@ tmpVehiclePos = VehiclePos();
+VehicleSample@ tmpVehicleSample = VehicleSample();
 ServerStatsUpdate@ tmpServerStatsUpdate = ServerStatsUpdate();
 
 MTUpdate@ BufToMTUpdate(MTUpdateTy ty, MemoryBuffer@ buf) {
@@ -1106,6 +1149,8 @@ MTUpdate@ BufToMTUpdate(MTUpdateTy ty, MemoryBuffer@ buf) {
             return tmpPlayerCamCursor.ReadFromBuf(buf);
         case MTUpdateTy::VehiclePos:
             return tmpVehiclePos.ReadFromBuf(buf);
+        case MTUpdateTy::VehicleSample:
+            return tmpVehicleSample.ReadFromBuf(buf);
         case MTUpdateTy::Admin_SetActionLimit:
             return SetActionLimitUpdate(buf);
         case MTUpdateTy::ChatMsg:
@@ -1308,6 +1353,7 @@ class PlayerInRoom {
     PlayerUpdateTy lastUpdate = PlayerUpdateTy::Cursor;
     PlayerCamCursor lastCamCursor = PlayerCamCursor();
     VehiclePos lastVehiclePos = VehiclePos();
+    VehicleReplay@ vehicleReplay = VehicleReplay();
     // car-skin url from this player's last test-mode entry ("" = default/unknown)
     string skinUrl;
     bool isTesting;
