@@ -172,7 +172,6 @@ namespace Editor {
             while (app.CurrentPlayground !is null || cast<CGameCtnEditorFree>(app.Editor) is null || app.LoadProgress.State != NGameLoadProgress::EState::Disabled) {
                 if (g_MTConn is null) break;
                 auto pg = cast<CSmArenaClient>(app.CurrentPlayground);
-                // gate on CurrentPlayground (loop entry also covers loading/sub-editors); announce before the vehicle check so enter precedes the first VehiclePos.
                 SetTestMode(pg !is null);
                 CheckUpdateVehicle(pg);
                 wasInPlayground = true;
@@ -193,7 +192,8 @@ namespace Editor {
             @editor = cast<CGameCtnEditorFree>(app.Editor);
             if (editor is null) { yield_why("null editor?!"); continue; }
 
-            // IsEditorReadyForRequest is false in skinning mode; keep listening and only skip at the apply stage.
+            // Note: editor.PluginMapType.IsEditorReadyForRequest is false when in skinning mode
+            // we still want to listen for updates, though, so we continue through until we get to actually applying updates and skip at that point.
 
             CheckUpdateCursor(editor);
 
@@ -269,7 +269,8 @@ namespace Editor {
                 log_trace("sending placed " + placeMb.Blocks.Length + " / " + placeMb.Items.Length);
                 for (uint i = 0; i < placeMb.Items.Length; i++) {
                     auto item = placeMb.Items[i];
-                    // send items as flying with block coord; avoids free-block placement issues
+                    // set all items flying and block coord before sending
+                    // this solves some problems placing them on free blocks
                     item.isFlying = 1;
                     item.coord = PosToCoord(item.pos);
 
@@ -326,7 +327,8 @@ namespace Editor {
                 continue;
             }
 
-            // applying updates in free view/pick/erase resets block mode to place (item mode unaffected); only process in place mode.
+            // when in block placement + free view / pick / erase, processing an update will reset the mode to place.
+            // does not happen in item mode. Unknown about selection add/remove mode. For simplicity, only process updates in place mode.
             bool skipProcessingDueToInputBugs = origEditMode != EditMode::Place;
             if (S_DontUpdateWhileBadEditMode && skipProcessingDueToInputBugs) {
                 yield_why("[Loop] skipping processing as editMode /= Place");
