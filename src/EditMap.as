@@ -35,14 +35,11 @@ void EditNewMapFrom(MapBase base, MapMood mood, MapCar vehicle, nat3 size, const
         deco.DecoSize.SizeY = size.y;
         deco.DecoSize.SizeZ = size.z;
         if (isStadium) {
-            // Stadium only accepts the standard deco nod name, so swap our deco
-            // in behind that fid for the duration of the load.
+            // Stadium only accepts the standard deco nod name; swap ours in behind that fid during load.
             startnew(SwapDecoHack);
             decoNodIdName = "48x48Screen155Day";
         } else {
-            // Other environments resolve their own nod IdName directly -- and it
-            // is not derivable from the file name: RedIsland/WhiteShore are
-            // "Day"/"Night"/..., GreenCoast/BlueBay are "Day64"/"Night64"/....
+            // other envs use their own nod IdName (not derivable from the file name).
             decoNodIdName = deco.IdName;
         }
     }

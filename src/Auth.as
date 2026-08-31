@@ -6,8 +6,7 @@ const string CheckTokenUpdate() {
     while (_IsRequestingAuthToken) yield_why("waiting for auth token");
     if (!HasAuthToken()) {
         _IsRequestingAuthToken = true;
-        // Auth::GetToken can legitimately take 5+ seconds, and occasionally
-        // throws transiently even with a valid siteid -- retry before failing.
+        // can be slow + occasionally throws when valid.
         for (uint attempt = 1; attempt <= 3; attempt++) {
             try {
                 auto task = Auth::GetToken();
@@ -23,8 +22,6 @@ const string CheckTokenUpdate() {
             }
             if (attempt < 3) sleep(3000);
         }
-        // always reset, or every later connect hangs forever in the
-        // while(_IsRequestingAuthToken) wait above
         _IsRequestingAuthToken = false;
     }
     return g_opAuthToken;

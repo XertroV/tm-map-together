@@ -333,15 +333,10 @@ class MapTogetherConnection {
     bool ExpectOKResp() {
         if (socket is null) return false;
         log_trace('Expecting OK response; waiting for available');
-        // Bounded wait: if the server rejects us and closes before we finish
-        // writing (bad version, empty token), our own writes to the closed
-        // socket can RST away the buffered ERR and IsHungUp() may never trip,
-        // so an unbounded loop here spins forever with no error surfaced.
+        // bounded wait in case of server issues
         uint okTimeoutAt = Time::Now + 15000;
         while (!socket.IsHungUp() && socket.Available() < 3 && Time::Now <= okTimeoutAt) yield();
-        // check Available() before IsHungUp(): the server writes ERR + a message
-        // and then shuts down immediately, so the socket is usually already hung
-        // up with the error still buffered and perfectly readable.
+        // server sends ERR msgs then shutdowns, end only if hung up + no available.
         if (socket.Available() < 3) {
             CloseWithErr(Time::Now > okTimeoutAt ? "Timeout waiting for server response" : "Server hung up");
             return false;
@@ -354,8 +349,7 @@ class MapTogetherConnection {
         if (resp != "ERR") {
             CloseWithErr("Unexpected response from server: " + resp);
         } else {
-            // the message follows as a length-prefixed string; once hung up, all
-            // of it is already buffered.
+            // read buffered if available
             uint msgTimeoutAt = Time::Now + 3000;
             while (!socket.IsHungUp() && socket.Available() < 2 && Time::Now <= msgTimeoutAt) yield();
             auto msg = socket.Available() < 2 ? "(no message)" : ReadLPString(socket);
@@ -370,8 +364,6 @@ class MapTogetherConnection {
         g_ConnectionStage = ConnectionStage::GettingAuthToken;
         string op_token = GetAuthToken();
         if (op_token.Length == 0) {
-            // the server rejects empty tokens anyway; fail here so the error is
-            // immediate and names the real cause instead of a handshake timeout
             CloseWithErr("No Openplanet auth token after retries (transient Openplanet auth hiccup; reconnect to retry)");
             return;
         }
@@ -406,10 +398,6 @@ class MapTogetherConnection {
         }
         log_info('Sent auth to server');
         // send version details VERSION_BYTES
-        // v6: map_base bits 2-4 carry the map environment (server accepts v5
-        // too, but refuses v5 clients joining a non-Stadium room), plus the
-        // ephemeral PlayerTestMode message (test-mode enter/leave + car-skin
-        // url), relayed to v6+ clients only.
         socket.Write(uint8(0xFF));
         socket.Write(uint8(0x06));
         socket.Write(uint8(0x80));
@@ -529,7 +517,6 @@ class MapTogetherConnection {
 
     void WriteTestMode(bool entering) {
         if (socket is null) return;
-        // refresh: the garage may have changed the skin since join
         if (entering) localSkinUrl = GetLocalCarSkinUrl();
         auto update = PlayerTestModeUpdate();
         update.entering = entering;
@@ -855,8 +842,8 @@ class MapTogetherConnection {
             return;
         }
         player.isTesting = update.entering;
-        // keep the cached skin on leave (a leave msg carries an empty url)
-        if (update.entering) player.skinUrl = update.skinUrl;
+        // only update skin on enter
+        if (update.entering && update.skinUrl.Length > 0) player.skinUrl = update.skinUrl;
     }
 
     void RenderPlayersNvg() {
@@ -936,8 +923,6 @@ class MapTogetherConnection {
             // log_trace("Buf to update now");
             MemoryBuffer@ serialized = saveToDisk ? EncodeMTUpdateForDisk(ty, buf) : null;
             @update = BufToMTUpdate(ty, buf);
-            // null for unknown/unimplemented types; payload is already consumed
-            // and the tail is consumed below, so the stream stays in sync.
             if (update !is null) @update.serialized = serialized;
             // log_trace("Got update");
         }

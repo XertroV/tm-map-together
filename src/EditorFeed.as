@@ -1,12 +1,9 @@
 bool g_DropMsgsTemp = false;
 
-// terrain diffs we recently broadcast and whose echoes are still expected;
-// matching echoes are dropped outright (see the echo filter in the feed loop)
+// recently broadcast terrain diffs; matching echoes are dropped in the feed loop.
 array<Editor::MacroblockSpec@> g_RecentLocalTerrainDiffs;
 
-// Hold the undo dance briefly after sending a ground-block placement: until
-// E++'s dirty ping arrives (a frame or two; longer unfocused), a dance would
-// rewind the terraform and the donor replay can't restore it.
+// hold the undo dance after ground-block sends; dancing before E++'s dirty ping rewinds terraform the replay can't restore.
 const uint64 DANCE_HOLD_AFTER_SEND_MS = 250;
 uint64 g_HoldDanceUntil = 0;
 
@@ -18,9 +15,7 @@ bool MacroblockHasGroundBlock(Editor::MacroblockSpec@ mb) {
     return false;
 }
 
-// Terraform sync: E++'s terrain hooks own the settle debounce + genealogy
-// grid diff (see MTTerrainHooks below); the callbacks only queue here and the
-// feed loop consumes, so sends and undo-stack bookkeeping stay in one place.
+// terraform sync: E++'s hooks own settle + grid diff; callbacks queue here, the feed loop consumes (see MTTerrainHooks).
 bool g_TerrainDirtyPing = false;
 array<Editor::MacroblockSpec@> g_PendingTerrainDiffs;
 
@@ -30,8 +25,7 @@ class MTTerrainHooks : Editor::Callbacks::IEppExtension {
         @onTerrainDirty = CoroutineFunc(this.OnTerrainDirty);
         @onTerrainChanged = Editor::Callbacks::ProcessTerrainChanged(this.OnTerrainChanged);
     }
-    // fires once when local terrain edits first dirty the grid (E++ skips
-    // its own pending resyncs/applies)
+    // fires when local terrain edits dirty the grid (E++ skips its own resyncs/applies)
     void OnTerrainDirty() {
         g_TerrainDirtyPing = true;
     }
@@ -167,8 +161,7 @@ namespace Editor {
 
         bool wasInPlayground = false;
         log_trace('[Loop] starting inner loop');
-        // baseline for terraform sync: drop anything the hooks picked up
-        // outside this session, then re-baseline the grid snapshot
+        // terraform baseline: drop pre-session hook pickups, re-baseline the snapshot
         g_TerrainDirtyPing = false;
         g_PendingTerrainDiffs.RemoveRange(0, g_PendingTerrainDiffs.Length);
         g_RecentLocalTerrainDiffs.RemoveRange(0, g_RecentLocalTerrainDiffs.Length);
@@ -179,10 +172,7 @@ namespace Editor {
             while (app.CurrentPlayground !is null || cast<CGameCtnEditorFree>(app.Editor) is null || app.LoadProgress.State != NGameLoadProgress::EState::Disabled) {
                 if (g_MTConn is null) break;
                 auto pg = cast<CSmArenaClient>(app.CurrentPlayground);
-                // gated on CurrentPlayground, not loop entry (this loop also
-                // covers loading/sub-editors); announcing before the vehicle
-                // check guarantees the enter message precedes the session's
-                // first VehiclePos.
+                // gate on CurrentPlayground (loop entry also covers loading/sub-editors); announce before the vehicle check so enter precedes the first VehiclePos.
                 SetTestMode(pg !is null);
                 CheckUpdateVehicle(pg);
                 wasInPlayground = true;
@@ -203,20 +193,14 @@ namespace Editor {
             @editor = cast<CGameCtnEditorFree>(app.Editor);
             if (editor is null) { yield_why("null editor?!"); continue; }
 
-            // Note: editor.PluginMapType.IsEditorReadyForRequest is false when in skinning mode
-            // we still want to listen for updates, though, so we continue through until we get to actually applying updates and skip at that point.
+            // IsEditorReadyForRequest is false in skinning mode; keep listening and only skip at the apply stage.
 
             CheckUpdateCursor(editor);
 
             // an exception mid-apply must not leave capture suppressed forever
             Editor::ResetCaptureSuppress();
 
-            // Read the LAST frame's buffers: they are complete regardless of
-            // coroutine ordering within a frame, so placements made by other
-            // plugins / API tools (which can run after this loop within the
-            // same frame, and used to rotate away unseen) are captured too.
-            // Our own update-applies fire the same hooks but are excluded via
-            // Editor::BeginCaptureSuppress around the apply section below.
+            // read LAST-frame buffers: complete under any coroutine order (catches late API placements); own applies excluded via BeginCaptureSuppress.
             @placedB = Editor::LastFrameBlocksPlaced();
             @delB = Editor::LastFrameBlocksDeleted();
             @placedI = Editor::LastFrameItemsPlaced();
@@ -285,8 +269,7 @@ namespace Editor {
                 log_trace("sending placed " + placeMb.Blocks.Length + " / " + placeMb.Items.Length);
                 for (uint i = 0; i < placeMb.Items.Length; i++) {
                     auto item = placeMb.Items[i];
-                    // set all items flying and block coord before sending
-                    // this solves some problems placing them on free blocks
+                    // send items as flying with block coord; avoids free-block placement issues
                     item.isFlying = 1;
                     item.coord = PosToCoord(item.pos);
 
@@ -314,13 +297,10 @@ namespace Editor {
                 log_debug("ignoring " + setSkins.Length + " set skins");
             }
 
-            // E++'s terrain hooks own the settle debounce + grid diff;
-            // terrain blocks never appear in the placement buffers.
+            // terrain never appears in placement buffers; E++'s hooks own settle + diff.
             if (g_TerrainDirtyPing) {
                 g_TerrainDirtyPing = false;
-                // a local terrain edit made undo entries with no server update
-                // to replay them: fold into the confirmed baseline now so an
-                // echo's undo dance can't rewind it
+                // local terrain edits have no replayable server update; fold into the confirmed baseline so a dance can't rewind them.
                 Editor_CachePosInUndoStack(editor);
             }
             while (g_PendingTerrainDiffs.Length > 0) {
@@ -331,10 +311,7 @@ namespace Editor {
                 g_MTConn.WritePlaced(terrainDiff);
                 g_RecentLocalTerrainDiffs.InsertLast(terrainDiff);
                 if (g_RecentLocalTerrainDiffs.Length > 32) g_RecentLocalTerrainDiffs.RemoveAt(0);
-                // deliberately NOT pushed onto myUpdateStack: terrain diffs
-                // are sync bookkeeping, and a Ctrl+Z virtual-undo of one
-                // resets the cells to collection default (not their prior
-                // state), eating the user's undo press to destroy terrain.
+                // not on myUpdateStack: virtual-undo of a terrain diff resets cells to collection default, eating the undo press.
                 reportUpdates = true;
             }
 
@@ -349,8 +326,7 @@ namespace Editor {
                 continue;
             }
 
-            // when in block placement + free view / pick / erase, processing an update will reset the mode to place.
-            // does not happen in item mode. Unknown about selection add/remove mode. For simplicity, only process updates in place mode.
+            // applying updates in free view/pick/erase resets block mode to place (item mode unaffected); only process in place mode.
             bool skipProcessingDueToInputBugs = origEditMode != EditMode::Place;
             if (S_DontUpdateWhileBadEditMode && skipProcessingDueToInputBugs) {
                 yield_why("[Loop] skipping processing as editMode /= Place");
@@ -361,10 +337,7 @@ namespace Editor {
                 g_MTConn.pendingUpdates.RemoveRange(0, g_MTConn.pendingUpdates.Length);
             }
 
-            // Drop our own terrain-diff echoes at any queue depth: applying
-            // one rewinds the cells to their capture-time state (eating
-            // anything placed since), and with several diffs in flight the
-            // single-update trivial-skip never matches.
+            // drop own terrain-diff echoes; applying one rewinds cells to capture-time state.
             if (g_RecentLocalTerrainDiffs.Length > 0) {
                 for (int ei = 0; ei < int(g_MTConn.pendingUpdates.Length); ei++) {
                     auto pu = cast<MTPlaceUpdate>(g_MTConn.pendingUpdates[ei]);
@@ -389,11 +362,7 @@ namespace Editor {
 
             // special case: the last update is the thing we just placed, and that's the only change
             bool skipNormalProcessing = false;
-            // +1 = a user action made one undo entry; +0 = an API placement
-            // (pmt.PlaceBlock makes no undo entry). Both are safe to skip: the
-            // content is already present and equal to the echo, and dancing
-            // instead editor-undoes mid-flight async terraform jobs (~1s),
-            // leaving ground blocks bald.
+            // +1 = user action, +0 = API place; both already hold the echo's content, and dancing would undo in-flight terraform.
             auto undoPosNow = Editor_GetCurrPosInUndoStack(editor);
             if (S_EnablePlacementOptmization_Skip1TrivialMine && nbPendingUpdates == 1
                 && (undoPosNow == cacheAutosavedIx + 1 || undoPosNow == cacheAutosavedIx)) {
@@ -422,9 +391,7 @@ namespace Editor {
             }
 
             if (!skipNormalProcessing && nbPendingUpdates > 0 && Time::Now < g_HoldDanceUntil) {
-                // pending non-trivial updates while our own terraform may
-                // still be applying: wait out the hold rather than dancing
-                // (the dance would kill the async terrain job)
+                // non-trivial updates during our own terraform: wait out the hold (dancing kills the async terrain job).
                 yield_why("holding dance for in-flight local terraform");
                 continue;
             }
@@ -448,8 +415,7 @@ namespace Editor {
 
                 log_debug("orig edit mode: " + tostring(editMode) + ", place mode: " + tostring(placeMode));
                 log_trace("applying updates: " + nbPendingUpdates);
-                // replayed edits fire the same engine hooks as user edits; keep
-                // them out of the capture buffers or we'd rebroadcast them
+                // replayed edits fire the same hooks; suppress capture or we'd rebroadcast them.
                 Editor::BeginCaptureSuppress();
                 Editor_UndoToLastCached(editor);
 

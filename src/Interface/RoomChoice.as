@@ -31,9 +31,6 @@ void DrawRoomMenuChoiceMain() {
     }
     bool serverChanged = preServer != m_CurrServer;
     if (serverChanged) {
-        // Drop any prefix, otherwise the join form reads it back next frame and
-        // snaps the server straight back to the one in the room ID. (The old
-        // length==9 check also missed "DEV_" ids, which are 10 chars.)
         m_RoomId = GetRoomIdNoServer(m_RoomId);
     }
 
@@ -276,9 +273,7 @@ void DrawRoomJoinForm(bool allowLoadExisting = false, bool isPuzzle = false) {
     }
 }
 
-// Canonical room-ID server prefixes, indexed by MTServers. This is the single
-// source of truth: every prefix helper below derives from it. Matching is
-// case-insensitive (people paste out of chat) but we always write capitals.
+// Room-ID server prefixes, indexed by MTServers; match case-insensitively, write capitals.
 const string[] ROOM_ID_PREFIXES = {"AU", "DE", "US", "DEV"};
 
 string ServerToRoomIdPrefix(MTServers server) {

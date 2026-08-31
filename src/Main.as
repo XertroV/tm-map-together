@@ -102,12 +102,8 @@ float stdTriHeight;
 float textPad;
 
 
-vec2 ScreenSize() {
-    return Display::GetSize();
-}
-
 void UpdateGraphicsValues() {
-    g_screen = ScreenSize();
+    g_screen = Display::GetSize();
     refScale = g_screen.y / referenceHeight;
     playerLabelBaseHeight = S_PlayerLabelHeight * refScale;
     stdTriHeight = playerLabelBaseHeight * 0.8;

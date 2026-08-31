@@ -179,7 +179,7 @@ class StatusMsgUI {
 
 vec2 GameEventsTopLeft {
     get {
-        vec2 screen = ScreenSize();
+        vec2 screen = Display::GetSize();
         float h = screen.y;
         float w = screen.x;
         float hOffset = 0;
