@@ -22,6 +22,9 @@ uint MTUpdateCount_VehiclePos_Destroyed = 0;
 uint MTUpdateCount_ChatUpdate_Created = 0;
 uint MTUpdateCount_ChatUpdate_Destroyed = 0;
 
+uint MTUpdateCount_PlayerTestMode_Created = 0;
+uint MTUpdateCount_PlayerTestMode_Destroyed = 0;
+
 uint MTUpdateCount_Meta_Created;
 uint MTUpdateCount_Meta_Destroyed;
 

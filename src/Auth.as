@@ -5,18 +5,24 @@ bool _IsRequestingAuthToken = false;
 const string CheckTokenUpdate() {
     while (_IsRequestingAuthToken) yield_why("waiting for auth token");
     if (!HasAuthToken()) {
-        try {
-            _IsRequestingAuthToken = true;
-            auto task = Auth::GetToken();
-            while (!task.Finished()) yield_why("waiting for auth token task to finish");
-            _IsRequestingAuthToken = false;
-            g_opAuthToken = task.Token();
-            lastAuthTime = Time::Now;
-            // OnGotNewToken();
-        } catch {
-            log_warn("Got exception refreshing auth token: " + getExceptionInfo());
-            g_opAuthToken = "";
+        _IsRequestingAuthToken = true;
+        // can be slow + occasionally throws when valid.
+        for (uint attempt = 1; attempt <= 3; attempt++) {
+            try {
+                auto task = Auth::GetToken();
+                while (!task.Finished()) yield_why("waiting for auth token task to finish");
+                g_opAuthToken = task.Token();
+            } catch {
+                log_warn("Exception refreshing auth token (attempt " + attempt + "/3): " + getExceptionInfo());
+                g_opAuthToken = "";
+            }
+            if (g_opAuthToken != "") {
+                lastAuthTime = Time::Now;
+                break;
+            }
+            if (attempt < 3) sleep(3000);
         }
+        _IsRequestingAuthToken = false;
     }
     return g_opAuthToken;
 }

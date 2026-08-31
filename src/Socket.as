@@ -40,6 +40,7 @@ class MapTogetherConnection {
     uint16 playerLimit;
     MapBase mapBaseName;
     MapMood mapBaseMood;
+    MapEnv mapBaseEnv;
 
     // if true, we have some special rules around room initialization
     bool isPuzzle;
@@ -66,6 +67,9 @@ class MapTogetherConnection {
 
     uint nbPlayersOnServer;
     uint lastPingResp;
+
+    // local player's car-skin url, cached at join and refreshed on test-mode entry
+    string localSkinUrl;
 
     StatusMsgUI@ statusMsgs = StatusMsgUI();
     ServerChat@ serverChat = ServerChat();
@@ -148,6 +152,7 @@ class MapTogetherConnection {
 
     // join a room
     MapTogetherConnection(const string &in roomId, const string &in password = "", bool _saveToDisk = false) {
+        server = m_CurrServer;
         remote_domain = ServerToEndpoint(m_CurrServer);
         log_info("Joining room on server: " + remote_domain);
         IS_CONNECTING = true;
@@ -226,6 +231,8 @@ class MapTogetherConnection {
             NotifyWarning("Map size mismatch: Server: " + mapSize.ToString() + "; Local: " + GetApp().RootMap.Size.ToString());
         }
 
+        localSkinUrl = GetLocalCarSkinUrl();
+
         trace('starting read updates loop');
         startnew(Editor::EditorFeedGen_Loop);
         startnew(CoroutineFunc(this.ReadUpdatesLoop));
@@ -253,7 +260,7 @@ class MapTogetherConnection {
     }
 
     string RoomIdWithServer() {
-        return tostring(server) + "_" + roomId;
+        return ServerToRoomIdPrefix(server) + "_" + roomId;
     }
 
     bool get_IsConnected() {
@@ -312,6 +319,7 @@ class MapTogetherConnection {
         log_info("Read map base: " + mapBase);
         mapBaseName = EncodedMapBaseToName(mapBase);
         mapBaseMood = EncodedMapBaseToMood(mapBase);
+        mapBaseEnv = EncodedMapBaseToEnv(mapBase);
         baseCar = socket.ReadUint8();
         log_info("Read base car: " + baseCar);
         rulesFlags = socket.ReadUint8();
@@ -325,9 +333,12 @@ class MapTogetherConnection {
     bool ExpectOKResp() {
         if (socket is null) return false;
         log_trace('Expecting OK response; waiting for available');
-        while (!socket.IsHungUp() && socket.Available() < 3) yield();
-        if (socket.IsHungUp()) {
-            CloseWithErr("Server hung up");
+        // bounded wait in case of server issues
+        uint okTimeoutAt = Time::Now + 15000;
+        while (!socket.IsHungUp() && socket.Available() < 3 && Time::Now <= okTimeoutAt) yield();
+        // server sends ERR msgs then shutdowns, end only if hung up + no available.
+        if (socket.Available() < 3) {
+            CloseWithErr(Time::Now > okTimeoutAt ? "Timeout waiting for server response" : "Server hung up");
             return false;
         }
         log_trace('Got enough bytes to read, avail: ' + socket.Available());
@@ -338,7 +349,10 @@ class MapTogetherConnection {
         if (resp != "ERR") {
             CloseWithErr("Unexpected response from server: " + resp);
         } else {
-            auto msg = ReadLPString(socket);
+            // read buffered if available
+            uint msgTimeoutAt = Time::Now + 3000;
+            while (!socket.IsHungUp() && socket.Available() < 2 && Time::Now <= msgTimeoutAt) yield();
+            auto msg = socket.Available() < 2 ? "(no message)" : ReadLPString(socket);
             CloseWithErr("Error from Server: " + msg);
         }
         return false;
@@ -349,6 +363,10 @@ class MapTogetherConnection {
         //
         g_ConnectionStage = ConnectionStage::GettingAuthToken;
         string op_token = GetAuthToken();
+        if (op_token.Length == 0) {
+            CloseWithErr("No Openplanet auth token after retries (transient Openplanet auth hiccup; reconnect to retry)");
+            return;
+        }
         g_ConnectionStage = ConnectionStage::ConnectingToServer;
         if (socket is null) return;
         // log_trace('token: ' + op_token);
@@ -381,7 +399,7 @@ class MapTogetherConnection {
         log_info('Sent auth to server');
         // send version details VERSION_BYTES
         socket.Write(uint8(0xFF));
-        socket.Write(uint8(0x05));
+        socket.Write(uint8(0x06));
         socket.Write(uint8(0x80));
     }
 
@@ -497,6 +515,20 @@ class MapTogetherConnection {
         socket.Write(buf, buf.GetSize());
     }
 
+    void WriteTestMode(bool entering) {
+        if (socket is null) return;
+        if (entering) localSkinUrl = GetLocalCarSkinUrl();
+        auto update = PlayerTestModeUpdate();
+        update.entering = entering;
+        update.skinUrl = entering ? localSkinUrl : "";
+        auto buf = MemoryBuffer();
+        update.WriteToNetworkBuffer(buf);
+        buf.Seek(0);
+        socket.Write(uint8(MTUpdateTy::PlayerTestMode));
+        socket.Write(uint32(buf.GetSize()));
+        socket.Write(buf, buf.GetSize());
+    }
+
     void WriteSetActionLimit(uint limit) {
         if (socket is null) return;
         if (!HasLocalAdmin()) return;
@@ -547,6 +579,7 @@ class MapTogetherConnection {
                     || next.ty == MTUpdateTy::Admin_SetActionLimit
                     || next.ty == MTUpdateTy::ChatMsg
                     || next.ty == MTUpdateTy::ServerStats
+                    || next.ty == MTUpdateTy::PlayerTestMode
                 ) {
                     if (next.ty == MTUpdateTy::ChatMsg) {
                         serverChat.scrollToBottom = true;
@@ -802,6 +835,17 @@ class MapTogetherConnection {
         }
     }
 
+    void UpdatePlayerTestMode(PlayerTestModeUpdate@ update) {
+        PlayerInRoom@ player = FindPlayerEver(update.meta.playerMwId);
+        if (player is null) {
+            warn("unexpected: player not found: " + update.meta.playerId);
+            return;
+        }
+        player.isTesting = update.entering;
+        // only update skin on enter
+        if (update.entering && update.skinUrl.Length > 0) player.skinUrl = update.skinUrl;
+    }
+
     void RenderPlayersNvg() {
         if (!S_RenderPlayersNvg) return;
         PlayerInRoom@ p;
@@ -879,7 +923,7 @@ class MapTogetherConnection {
             // log_trace("Buf to update now");
             MemoryBuffer@ serialized = saveToDisk ? EncodeMTUpdateForDisk(ty, buf) : null;
             @update = BufToMTUpdate(ty, buf);
-            @update.serialized = serialized;
+            if (update !is null) @update.serialized = serialized;
             // log_trace("Got update");
         }
         // if (avail - socket.Available() > int(len)) {
@@ -980,6 +1024,7 @@ enum MTUpdateTy {
     ChatMsg = 20,
     Ping = 21,
     ServerStats = 22,
+    PlayerTestMode = 23,
     // not numbered yet
     // put new commands above this
     XXX_LAST
@@ -1070,6 +1115,8 @@ MTUpdate@ BufToMTUpdate(MTUpdateTy ty, MemoryBuffer@ buf) {
             return PingUpdate(buf);
         case MTUpdateTy::ServerStats:
             return tmpServerStatsUpdate.ReadFromBuf(buf);
+        case MTUpdateTy::PlayerTestMode:
+            return PlayerTestModeUpdate(buf);
     }
     return null;
 }
@@ -1191,6 +1238,11 @@ void WriteLPString(Net::Socket@ socket, const string &in str) {
     socket.WriteRaw(str);
 }
 
+const string GetLocalCarSkinUrl() {
+    auto pi = GetApp().LocalPlayerInfo;
+    return pi is null ? "" : pi.Model_CarSport_SkinUrl;
+}
+
 string ReadLPStringFromBuffer(MemoryBuffer@ buf) {
     uint16 len = buf.ReadUInt16();
     return buf.ReadString(len);
@@ -1256,6 +1308,9 @@ class PlayerInRoom {
     PlayerUpdateTy lastUpdate = PlayerUpdateTy::Cursor;
     PlayerCamCursor lastCamCursor = PlayerCamCursor();
     VehiclePos lastVehiclePos = VehiclePos();
+    // car-skin url from this player's last test-mode entry ("" = default/unknown)
+    string skinUrl;
+    bool isTesting;
 
     PlayerInRoom(const string &in name, const string &in id, uint64 joinTime) {
         this.name = name;

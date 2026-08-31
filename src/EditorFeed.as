@@ -1,5 +1,55 @@
 bool g_DropMsgsTemp = false;
 
+// recently broadcast terrain diffs; matching echoes are dropped in the feed loop.
+array<Editor::MacroblockSpec@> g_RecentLocalTerrainDiffs;
+
+// hold the rebase after ground-block sends; rebasing before E++'s dirty ping rewinds terraform the replay can't restore.
+const uint64 REBASE_HOLD_AFTER_SEND_MS = 250;
+uint64 g_HoldRebaseUntil = 0;
+
+bool MacroblockHasGroundBlock(Editor::MacroblockSpec@ mb) {
+    if (mb is null) return false;
+    for (uint i = 0; i < mb.Blocks.Length; i++) {
+        if (mb.Blocks[i].isGround) return true;
+    }
+    return false;
+}
+
+// terraform sync: E++'s hooks own settle + grid diff; callbacks queue here, the feed loop consumes (see MTTerrainHooks).
+bool g_TerrainDirtyPing = false;
+array<Editor::MacroblockSpec@> g_PendingTerrainDiffs;
+
+class MTTerrainHooks : Editor::Callbacks::IEppExtension {
+    MTTerrainHooks() {
+        name = "map-together terrain sync";
+        @onTerrainDirty = CoroutineFunc(this.OnTerrainDirty);
+        @onTerrainChanged = Editor::Callbacks::ProcessTerrainChanged(this.OnTerrainChanged);
+    }
+    // fires when local terrain edits dirty the grid (E++ skips its own resyncs/applies)
+    void OnTerrainDirty() {
+        g_TerrainDirtyPing = true;
+    }
+    // fires with the settled terrain-only diff of changed cells
+    void OnTerrainChanged(Editor::MacroblockSpec@ terrainDiff) {
+        g_PendingTerrainDiffs.InsertLast(terrainDiff);
+    }
+}
+
+MTTerrainHooks@ g_MTTerrainHooks;
+
+void RegisterTerrainHooksOnce() {
+    if (g_MTTerrainHooks !is null) return;
+    @g_MTTerrainHooks = MTTerrainHooks();
+    Editor::Callbacks::Exts::RegisterExtension(g_MTTerrainHooks);
+    log_info("registered E++ terrain hooks");
+}
+
+void KillTerrainHooks() {
+    if (g_MTTerrainHooks is null) return;
+    g_MTTerrainHooks.kill();
+    @g_MTTerrainHooks = null;
+}
+
 #if DEPENDENCY_EDITOR
 
 
@@ -67,12 +117,15 @@ namespace Editor {
     bool feed_hasPlacedSomething = false;
     uint feed_hasPlacedSomethingTime = 0;
     bool feed_hasSyncronized = false;
+    bool feed_inTestMode = false;
 
     void EditorFeedGen_Loop() {
+        RegisterTerrainHooksOnce();
         feedStart_WasYoloModeEnabled = S_YoloMode;
         feed_hasPlacedSomething = false;
         feed_hasPlacedSomethingTime = 0;
         feed_hasSyncronized = false;
+        feed_inTestMode = false;
         S_YoloMode = false;
 
         ResetOnEnterEditor();
@@ -103,23 +156,30 @@ namespace Editor {
         const array<ItemSpec@>@ placedI;
         const array<ItemSpec@>@ delI;
         const array<SetSkinSpec@>@ setSkins;
-        const array<SetSkinSpec@>@ lastSetSkins;
         MacroblockSpec@ placeMb;
         MacroblockSpec@ delMb;
 
         bool wasInPlayground = false;
         log_trace('[Loop] starting inner loop');
+        // terraform baseline: drop pre-session hook pickups, re-baseline the snapshot
+        g_TerrainDirtyPing = false;
+        g_PendingTerrainDiffs.RemoveRange(0, g_PendingTerrainDiffs.Length);
+        g_RecentLocalTerrainDiffs.RemoveRange(0, g_RecentLocalTerrainDiffs.Length);
+        Editor::RefreshTerrainSnapshot();
         while (app.Editor !is null) {
             if (dev_TraceEachLoop) log_trace("[Loop] start");
             wasInPlayground = false;
             while (app.CurrentPlayground !is null || cast<CGameCtnEditorFree>(app.Editor) is null || app.LoadProgress.State != NGameLoadProgress::EState::Disabled) {
                 if (g_MTConn is null) break;
-                CheckUpdateVehicle(cast<CSmArenaClient>(app.CurrentPlayground));
+                auto pg = cast<CSmArenaClient>(app.CurrentPlayground);
+                SetTestMode(pg !is null);
+                CheckUpdateVehicle(pg);
                 wasInPlayground = true;
                 // g_MTConn.PauseAutoRead = true;
                 // ReadIntoPendingMessagesWithDiscard();
                 yield_why("[Loop] in playground or loading");
             }
+            SetTestMode(false);
             if (wasInPlayground) {
                 wasInPlayground = false;
                 yield_why("[Loop] was in playground");
@@ -137,13 +197,15 @@ namespace Editor {
 
             CheckUpdateCursor(editor);
 
-            // by getting the placed/del for this frame at this point, our actions will be cleared before the next frame.
-            @placedB = Editor::ThisFrameBlocksPlaced();
-            @delB = Editor::ThisFrameBlocksDeleted();
-            @placedI = Editor::ThisFrameItemsPlaced();
-            @delI = Editor::ThisFrameItemsDeleted();
-            @setSkins = Editor::ThisFrameSkinsSet();
-            @lastSetSkins = Editor::LastFrameSkinsSet();
+            // an exception mid-apply must not leave capture suppressed forever
+            Editor::ResetCaptureSuppress();
+
+            // read LAST-frame buffers: complete under any coroutine order (catches late API placements); own applies excluded via BeginCaptureSuppress.
+            @placedB = Editor::LastFrameBlocksPlaced();
+            @delB = Editor::LastFrameBlocksDeleted();
+            @placedI = Editor::LastFrameItemsPlaced();
+            @delI = Editor::LastFrameItemsDeleted();
+            @setSkins = Editor::LastFrameSkinsSet();
             // trace('setSkins: ' + setSkins.Length);
             // trace('setSkinsApi: ' + Editor::ThisFrameSkinsSetByAPI().Length);
             // trace('setSkinsLastFrame: ' + Editor::LastFrameSkinsSet().Length);
@@ -217,6 +279,9 @@ namespace Editor {
                     }
                 }
                 g_MTConn.WritePlaced(placeMb);
+                if (MacroblockHasGroundBlock(placeMb)) {
+                    g_HoldRebaseUntil = Time::Now + REBASE_HOLD_AFTER_SEND_MS;
+                }
                 if (!m_ShouldIgnoreNextAction) {
                     myUpdateStack.InsertLast(MTPlaceUpdate(placeMb));
                 } else {
@@ -231,6 +296,24 @@ namespace Editor {
                 reportUpdates = true;
             } else if (!S_EnableSettingSkins && setSkins.Length > 0) {
                 log_debug("ignoring " + setSkins.Length + " set skins");
+            }
+
+            // terrain never appears in placement buffers; E++'s hooks own settle + diff.
+            if (g_TerrainDirtyPing) {
+                g_TerrainDirtyPing = false;
+                // local terrain edits have no replayable server update; fold into the confirmed baseline so a rebase can't rewind them.
+                Editor_CachePosInUndoStack(editor);
+            }
+            while (g_PendingTerrainDiffs.Length > 0) {
+                auto terrainDiff = g_PendingTerrainDiffs[0];
+                g_PendingTerrainDiffs.RemoveAt(0);
+                if (terrainDiff is null || terrainDiff.terrains.Length == 0) continue;
+                log_info("sending terrain diff: " + terrainDiff.terrains.Length + " cells");
+                g_MTConn.WritePlaced(terrainDiff);
+                g_RecentLocalTerrainDiffs.InsertLast(terrainDiff);
+                if (g_RecentLocalTerrainDiffs.Length > 32) g_RecentLocalTerrainDiffs.RemoveAt(0);
+                // not on myUpdateStack: virtual-undo of a terrain diff resets cells to collection default, eating the undo press.
+                reportUpdates = true;
             }
 
             if (m_ShouldIgnoreNextAction) {
@@ -256,6 +339,24 @@ namespace Editor {
                 g_MTConn.pendingUpdates.RemoveRange(0, g_MTConn.pendingUpdates.Length);
             }
 
+            // drop own terrain-diff echoes; applying one rewinds cells to capture-time state.
+            if (g_RecentLocalTerrainDiffs.Length > 0) {
+                for (int ei = 0; ei < int(g_MTConn.pendingUpdates.Length); ei++) {
+                    auto pu = cast<MTPlaceUpdate>(g_MTConn.pendingUpdates[ei]);
+                    if (pu is null || pu.mb is null) continue;
+                    if (pu.mb.terrains.Length == 0 || pu.mb.blocks.Length > 0 || pu.mb.items.Length > 0) continue;
+                    for (uint rj = 0; rj < g_RecentLocalTerrainDiffs.Length; rj++) {
+                        if (AreMacroblockSpecsEq(g_RecentLocalTerrainDiffs[rj], pu.mb)) {
+                            log_debug("dropping own terrain-diff echo (" + pu.mb.terrains.Length + " cells)");
+                            g_MTConn.pendingUpdates.RemoveAt(uint(ei));
+                            g_RecentLocalTerrainDiffs.RemoveAt(rj);
+                            ei--;
+                            break;
+                        }
+                    }
+                }
+            }
+
             auto nbPendingUpdates = Math::Clamp(g_MTConn.pendingUpdates.Length, 0, 50);
             if (reportUpdates || nbPendingUpdates > 0) {
                 log_trace("nbPendingUpdates: " + nbPendingUpdates);
@@ -263,7 +364,10 @@ namespace Editor {
 
             // special case: the last update is the thing we just placed, and that's the only change
             bool skipNormalProcessing = false;
-            if (S_EnablePlacementOptmization_Skip1TrivialMine && nbPendingUpdates == 1 && Editor_GetCurrPosInUndoStack(editor) == cacheAutosavedIx + 1) {
+            // +1 = user action, +0 = API place; both already hold the echo's content, and rebasing would undo in-flight terraform.
+            auto undoPosNow = Editor_GetCurrPosInUndoStack(editor);
+            if (S_EnablePlacementOptmization_Skip1TrivialMine && nbPendingUpdates == 1
+                && (undoPosNow == cacheAutosavedIx + 1 || undoPosNow == cacheAutosavedIx)) {
                 auto placeUpdate = cast<MTPlaceUpdate>(g_MTConn.pendingUpdates[0]);
                 auto delUpdate = cast<MTDeleteUpdate>(g_MTConn.pendingUpdates[0]);
                 if (g_MTConn.pendingUpdates[0].ty == MTUpdateTy::Place
@@ -288,6 +392,12 @@ namespace Editor {
                 }
             }
 
+            if (!skipNormalProcessing && nbPendingUpdates > 0 && Time::Now < g_HoldRebaseUntil) {
+                // non-trivial updates during our own terraform: wait out the hold (rebasing kills the async terrain job).
+                yield_why("holding rebase for in-flight local terraform");
+                continue;
+            }
+
             if (!skipNormalProcessing && nbPendingUpdates > 0) {
                 auto pmt = editor.PluginMapType;
 
@@ -307,6 +417,8 @@ namespace Editor {
 
                 log_debug("orig edit mode: " + tostring(editMode) + ", place mode: " + tostring(placeMode));
                 log_trace("applying updates: " + nbPendingUpdates);
+                // replayed edits fire the same hooks; suppress capture or we'd rebroadcast them.
+                Editor::BeginCaptureSuppress();
                 Editor_UndoToLastCached(editor);
 
                 uint startPlacing = Time::Now;
@@ -393,6 +505,7 @@ namespace Editor {
                 // set item mode
 
                 log_debug("restored edit mode: " + tostring(pmt.EditMode) + ", place mode: " + tostring(pmt.PlaceMode));
+                Editor::EndCaptureSuppress();
             }
             if (dev_TraceEachLoop) {
                 log_trace("[Loop] end");
@@ -402,6 +515,7 @@ namespace Editor {
             // yield();
             // yield_why("loop end");
         }
+        SetTestMode(false);
         log_warn('exited Editor::EditorFeedGen_Loop');
         if (g_MTConn !is null) {
             g_MTConn.Close();
@@ -570,6 +684,13 @@ namespace Editor {
                     : 50
             );
         }
+    }
+
+    // announces test-mode enter/leave (with the car-skin url on enter); idempotent
+    void SetTestMode(bool on) {
+        if (feed_inTestMode == on) return;
+        feed_inTestMode = on;
+        if (g_MTConn !is null) g_MTConn.WriteTestMode(on);
     }
 
     void CheckUpdateVehicle(CSmArenaClient@ pg) {
