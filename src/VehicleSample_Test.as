@@ -12,7 +12,7 @@ namespace Tests {
         s.brake = 17;
         s.wheelContact = 0x0B;
         s.misc = VS_MISC_TURBO | VS_MISC_GROUND_CONTACT;
-        s.rpmDiv50 = 220; // 11000 rpm
+        s.rpm = 11000;
         return s;
     }
 
@@ -37,7 +37,7 @@ namespace Tests {
         ctx.AssertSame(int(rt.brake), int(s.brake), "brake round trips");
         ctx.AssertSame(int(rt.wheelContact), int(s.wheelContact), "wheelContact round trips");
         ctx.AssertSame(int(rt.misc), int(s.misc), "misc round trips");
-        ctx.AssertSame(int(rt.rpmDiv50), int(s.rpmDiv50), "rpm round trips");
+        ctx.AssertSame(int(rt.rpm), 11000, "rpm stored raw (not /50)");
 
         // append-only forward compat: a future fmt with appended tail bytes
         // must still parse its fmt-1 prefix on this reader

@@ -44,7 +44,7 @@ class VehicleSample : MTUpdate {
     uint8 brake;    // 0-255
     uint8 wheelContact; // bits 0-3 = FL,FR,RL,RR
     uint8 misc;     // VS_MISC_* bits
-    uint16 rpmDiv50;
+    uint16 rpm;     // raw engine RPM; uint16 covers typical TM range (<65k)
 
     VehicleSample() {
         super();
@@ -82,7 +82,7 @@ class VehicleSample : MTUpdate {
             | (state.IsTurbo ? VS_MISC_TURBO : 0)
             | (state.IsGroundContact ? VS_MISC_GROUND_CONTACT : 0)
             | (state.EngineOn ? VS_MISC_ENGINE_ON : 0);
-        rpmDiv50 = uint16(Math::Clamp(VehicleState::GetRPM(state) / 50.0, 0.0, 65535.0));
+        rpm = uint16(Math::Clamp(VehicleState::GetRPM(state), 0.0, 65535.0));
         return true;
     }
 
@@ -100,7 +100,7 @@ class VehicleSample : MTUpdate {
         buf.Write(brake);
         buf.Write(wheelContact);
         buf.Write(misc);
-        buf.Write(rpmDiv50);
+        buf.Write(rpm);
     }
 
     // Reads the fmt-1 prefix; any appended future-fmt tail is left unread
@@ -118,7 +118,7 @@ class VehicleSample : MTUpdate {
         brake = buf.ReadUInt8();
         wheelContact = buf.ReadUInt8();
         misc = buf.ReadUInt8();
-        rpmDiv50 = buf.ReadUInt16();
+        rpm = buf.ReadUInt16();
         return this;
     }
 
@@ -132,7 +132,7 @@ class VehicleSample : MTUpdate {
         fmt = o.fmt; flags = o.flags; tMs = o.tMs;
         pos = o.pos; dir = o.dir; up = o.up; vel = o.vel;
         steer = o.steer; gas = o.gas; brake = o.brake;
-        wheelContact = o.wheelContact; misc = o.misc; rpmDiv50 = o.rpmDiv50;
+        wheelContact = o.wheelContact; misc = o.misc; rpm = o.rpm;
     }
 }
 
@@ -147,7 +147,7 @@ class VehicleInterpState {
     uint8 brake;
     uint8 wheelContact;
     uint8 misc;
-    uint16 rpmDiv50;
+    uint16 rpm;
     bool extrapolated = false;
 }
 
@@ -251,7 +251,7 @@ class VehicleReplay : HasPlayerLabelDraw {
     private void FillFrom(VehicleSample@ s, VehicleInterpState@ o) {
         o.pos = s.pos; o.dir = s.dir; o.up = s.up;
         o.steer = s.steer; o.gas = s.gas; o.brake = s.brake;
-        o.wheelContact = s.wheelContact; o.misc = s.misc; o.rpmDiv50 = s.rpmDiv50;
+        o.wheelContact = s.wheelContact; o.misc = s.misc; o.rpm = s.rpm;
         o.extrapolated = false;
     }
 
@@ -287,7 +287,7 @@ class VehicleReplay : HasPlayerLabelDraw {
         o.steer = Math::Lerp(a.steer, b.steer, s);
         // step-hold discrete-ish state from the newer bracketing sample
         o.gas = b.gas; o.brake = b.brake;
-        o.wheelContact = b.wheelContact; o.misc = b.misc; o.rpmDiv50 = b.rpmDiv50;
+        o.wheelContact = b.wheelContact; o.misc = b.misc; o.rpm = b.rpm;
         o.extrapolated = false;
     }
 
