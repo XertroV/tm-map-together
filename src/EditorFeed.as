@@ -676,6 +676,7 @@ namespace Editor {
     VehicleSample@ lastVehicleSample = VehicleSample();
     uint lastUpdateVehicleCheck = 0;
     uint lastUpdateCursorCheck = 0;
+    uint vehicleSampleSeq = 0;
     uint updateEveryMs {
         get {
             return Math::Max(
@@ -694,13 +695,10 @@ namespace Editor {
         if (g_MTConn !is null) g_MTConn.WriteTestMode(on);
     }
 
-    // VehicleSample cadence: scales with players concurrently streaming
-    // samples (not room size), and deliberately has NO random jitter —
-    // samples are timestamped and the receiver buffers, so bursts are
-    // handled by the replay layer rather than by send-time smearing.
+    // VehicleSample cadence: 20Hz to 4 drivers, lerp to 10Hz by 8.
     uint get_vehicleSampleEveryMs() {
         uint others = g_MTConn !is null ? g_MTConn.NbActiveVehicleSenders() : 0;
-        return uint(Math::Clamp(int(15 * (1 + others)), 50, 100));
+        return VehicleSampleIntervalMs(1 + others);
     }
 
     void CheckUpdateVehicle(CSmArenaClient@ pg) {
@@ -713,10 +711,11 @@ namespace Editor {
         if (lastVehicleSample.UpdateFromGame(vis)) {
             lastUpdateVehicleCheck = Time::Now;
             g_MTConn.WriteVehicleSample(lastVehicleSample);
-            // dual-send transition: live v5 peers can only parse VehiclePos
-            if (lastVehiclePos.UpdateFromGame(vis)) {
+            // v5 fallback, every 3rd sample
+            if (VehiclePosDueThisSample(vehicleSampleSeq) && lastVehiclePos.UpdateFromGame(vis)) {
                 g_MTConn.WriteVehiclePos(lastVehiclePos);
             }
+            vehicleSampleSeq++;
         }
     }
 

@@ -839,8 +839,7 @@ class MapTogetherConnection {
         for (uint i = 0; i < playersInRoom.Length; i++) {
             @player = playersInRoom[i];
             if (player.id == pos.meta.playerId) {
-                // dual-send transition: a v6 sender also sends VehicleSample;
-                // prefer that stream and ignore its legacy VehiclePos copies.
+                // v6 already has VehicleSample — ignore this VehiclePos
                 if (player.vehicleReplay.FreshWithin(Time::Now, 2000)) return;
                 player.lastUpdate = PlayerUpdateTy::Vehicle;
                 player.lastVehiclePos.UpdateFrom(pos);
@@ -859,8 +858,7 @@ class MapTogetherConnection {
         player.vehicleReplay.Add(sample, Time::Now);
     }
 
-    // Cadence input for the send side: how many players are actively
-    // streaming VehicleSamples right now (self is counted by the caller).
+    // Remote players currently streaming samples (caller adds self).
     uint NbActiveVehicleSenders() {
         uint n = 0;
         uint64 now = Time::Now;

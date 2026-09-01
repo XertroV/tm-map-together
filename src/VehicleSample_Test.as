@@ -153,5 +153,18 @@ namespace Tests {
         ctx.AssertTrue(stC.pos.z < 0.26, "corner bends: z got " + stC.pos.z);
         ctx.AssertTrue(Math::Abs(stC.dir.Length() - 1.0) < 0.001, "interp dir normalized");
     }
+
+    void MapTogether_VehicleSampleCadence(TestKit::Ctx@ ctx) {
+        ctx.AssertSame(int(VehicleSampleIntervalMs(1)), 50, "solo is 20Hz");
+        ctx.AssertSame(int(VehicleSampleIntervalMs(4)), 50, "4 drivers stay 20Hz");
+        ctx.AssertSame(int(VehicleSampleIntervalMs(5)), 63, "5 drivers lerp off 20Hz");
+        ctx.AssertSame(int(VehicleSampleIntervalMs(6)), 75, "6 drivers midpoint");
+        ctx.AssertSame(int(VehicleSampleIntervalMs(8)), 100, "8 drivers reach 10Hz");
+        ctx.AssertSame(int(VehicleSampleIntervalMs(12)), 100, "10Hz floor");
+        ctx.AssertTrue(VehiclePosDueThisSample(0), "first sample sends VehiclePos");
+        ctx.AssertFalse(VehiclePosDueThisSample(1), "skip 1");
+        ctx.AssertFalse(VehiclePosDueThisSample(2), "skip 2");
+        ctx.AssertTrue(VehiclePosDueThisSample(3), "every 3rd sample");
+    }
 }
 #endif

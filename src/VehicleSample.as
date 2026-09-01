@@ -18,6 +18,19 @@ const uint8 VS_MISC_ENGINE_ON = 8;
 // is the reliable signal, wheel bits are best-effort for animation.
 const float VS_WHEEL_CONTACT_DAMPER_LEN = 0.10;
 
+// 20Hz through 4 drivers, lerp to 10Hz by 8.
+uint VehicleSampleIntervalMs(uint concurrentDrivers) {
+    if (concurrentDrivers <= 4) return 50;
+    if (concurrentDrivers >= 8) return 100;
+    float t = float(concurrentDrivers - 4) / 4.0;
+    return uint(Math::Lerp(50.0, 100.0, t) + 0.5);
+}
+
+// VehiclePos every 3rd sample (~150ms at 20Hz).
+bool VehiclePosDueThisSample(uint sampleIx) {
+    return (sampleIx % 3) == 0;
+}
+
 class VehicleSample : MTUpdate {
     uint8 fmt = VEHICLE_SAMPLE_FMT;
     uint8 flags = 0;
