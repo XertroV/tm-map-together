@@ -113,6 +113,10 @@ namespace Tests {
         Reg("FailShape", MapTogether_FailShape);
         Reg("PlayerTestModeRoundTrip", MapTogether_PlayerTestModeRoundTrip);
         Reg("VehiclePosRoundTrip", MapTogether_VehiclePosRoundTrip);
+        Reg("VehicleSampleRoundTrip", MapTogether_VehicleSampleRoundTrip);
+        Reg("VehicleSampleBench", MapTogether_VehicleSampleBench);
+        Reg("VehicleReplayInterp", MapTogether_VehicleReplayInterp);
+        Reg("VehicleSampleCadence", MapTogether_VehicleSampleCadence);
     }
 
     // Drives the registry through `sink`. A test that throws is reported as a

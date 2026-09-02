@@ -295,10 +295,8 @@ void DrawCreateRoomForm_BottomPart_Mutable() {
         if (UI::Selectable("Rally", m_Car == MapCar::CarRally)) {
             m_Car = MapCar::CarRally;
         }
-        if (Time::Stamp > 1712008800) {
-            if (UI::Selectable("Desert", m_Car == MapCar::CarDesert)) {
-                m_Car = MapCar::CarDesert;
-            }
+        if (UI::Selectable("Desert", m_Car == MapCar::CarDesert)) {
+            m_Car = MapCar::CarDesert;
         }
         UI::EndCombo();
     }
