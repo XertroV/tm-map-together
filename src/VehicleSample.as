@@ -44,7 +44,7 @@ class VehicleSample : MTUpdate {
     uint8 brake;    // 0-255
     uint8 wheelContact; // bits 0-3 = FL,FR,RL,RR
     uint8 misc;     // VS_MISC_* bits
-    uint16 rpm;     // raw engine RPM; uint16 covers typical TM range (<65k)
+    uint16 rpm;
 
     VehicleSample() {
         super();
