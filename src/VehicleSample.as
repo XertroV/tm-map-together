@@ -1,21 +1,18 @@
-// VehicleSample (MTUpdateTy::VehicleSample = 24, protocol v6): replay-quality
-// vehicle state, replacing VehiclePos for v6+ peers. The payload is
-// self-versioned (leading fmt byte, append-only: readers parse the prefix they
-// know and ignore the tail) and the server relays it as an opaque blob.
-// Spec: map-together-server docs/vehicle-sample-plan.md.
+// VehicleSample (msg 24, v6): replay-quality vehicle state, replacing VehiclePos
+// for v6+ peers. Server relays it opaquely; payload is self-versioned via a
+// leading fmt byte and append-only. Spec: server docs/vehicle-sample-plan.md.
 
 const uint8 VEHICLE_SAMPLE_FMT = 1;
 const uint VEHICLE_SAMPLE_FMT1_SIZE = 64;
 
-// misc bit assignments (fmt 1)
+// `misc` bits (fmt 1)
 const uint8 VS_MISC_IS_BRAKING = 1;
 const uint8 VS_MISC_TURBO = 2;
 const uint8 VS_MISC_GROUND_CONTACT = 4;
 const uint8 VS_MISC_ENGINE_ON = 8;
 
-// Per-wheel contact heuristic: damper compressed below this = touching.
-// Calibrate in-game; the aggregate AsyncState.IsGroundContact bit in `misc`
-// is the reliable signal, wheel bits are best-effort for animation.
+// Damper compressed below this = wheel touching. Best-effort (animation only);
+// the IsGroundContact bit in `misc` is the reliable signal.
 const float VS_WHEEL_CONTACT_DAMPER_LEN = 0.10;
 
 // 20Hz through 4 drivers, lerp to 10Hz by 8.
@@ -34,7 +31,7 @@ bool VehiclePosDueThisSample(uint sampleIx) {
 class VehicleSample : MTUpdate {
     uint8 fmt = VEHICLE_SAMPLE_FMT;
     uint8 flags = 0;
-    uint tMs;       // sender Time::Now — epoch is per-sender (game-launch relative)
+    uint tMs;       // sender Time::Now; epoch is per-sender (game-launch relative)
     vec3 pos;
     vec3 dir;
     vec3 up;
@@ -57,8 +54,7 @@ class VehicleSample : MTUpdate {
         ReadFromBuf(buf);
     }
 
-    // Sources "whatever is most recently available" from the vis AsyncState at
-    // the send tick. Returns true when there is a car to sample.
+    // Samples the vis AsyncState as-is. False when there's no car.
     bool UpdateFromGame(CSceneVehicleVis@ vis) {
         if (vis is null) return false;
         auto state = vis.AsyncState;
@@ -86,7 +82,6 @@ class VehicleSample : MTUpdate {
         return true;
     }
 
-    // Wire order matches the spec table exactly; a straight run of writes.
     void WriteToNetworkBuffer(MemoryBuffer@ buf) const {
         buf.Write(fmt);
         buf.Write(flags);
@@ -103,8 +98,7 @@ class VehicleSample : MTUpdate {
         buf.Write(rpm);
     }
 
-    // Reads the fmt-1 prefix; any appended future-fmt tail is left unread
-    // (the caller framed the payload, leftover bytes are simply ignored).
+    // Reads the fmt-1 prefix; a future-fmt tail is left unread (caller framed it).
     VehicleSample@ ReadFromBuf(MemoryBuffer@ buf) {
         fmt = buf.ReadUInt8();
         flags = buf.ReadUInt8();
@@ -151,10 +145,9 @@ class VehicleInterpState {
     bool extrapolated = false;
 }
 
-// Per-remote-player replay buffer: keeps recent samples and renders the car a
-// little in the past (delayMs) so there are buffered future points to
-// interpolate through, absorbing network jitter. All clock math is per-player:
-// every sender's tMs epoch is different (game-launch relative).
+// Per-remote-player replay buffer: renders the car DelayMs in the past so there
+// are buffered future samples to interpolate through, absorbing jitter. Clock
+// math is per-player — every sender's tMs epoch differs.
 class VehicleReplay : HasPlayerLabelDraw {
     private array<VehicleSample@> ring;
     private uint head = 0;   // next write index
@@ -171,12 +164,11 @@ class VehicleReplay : HasPlayerLabelDraw {
 
     void Add(VehicleSample@ s, uint64 localNowMs) {
         if (count > 0) {
-            // At(0) is the newest existing sample (we haven't written yet)
             int64 gap = int64(s.tMs) - int64(At(0).tMs);
-            if (gap <= 0) return; // stale/dup (out-of-order relay) — drop
+            if (gap <= 0) return; // stale/dup from out-of-order relay
             if (gap < 5000) gapEwmaMs = gapEwmaMs * 0.8 + double(gap) * 0.2;
         }
-        // decode target is a shared tmp object; copy into the ring slot
+        // decode target is shared scratch; copy into the ring slot
         ring[head].CopyFrom(s);
         head = (head + 1) % ring.Length;
         if (count < ring.Length) count++;
@@ -185,7 +177,7 @@ class VehicleReplay : HasPlayerLabelDraw {
             offsetEstMs = offset;
             offsetInit = true;
         } else {
-            // drift slowly; jump if wildly off (reconnect / clock restart)
+            // drift slowly, but jump on reconnect / clock restart
             if (Math::Abs(float(offset - offsetEstMs)) > 5000.0) offsetEstMs = offset;
             else offsetEstMs = offsetEstMs * 0.9 + offset * 0.1;
         }
@@ -198,8 +190,8 @@ class VehicleReplay : HasPlayerLabelDraw {
 
     uint get_Count() { return count; }
 
+    // newestBack = 0 -> newest sample
     private VehicleSample@ At(uint newestBack) {
-        // newestBack = 0 → newest sample
         uint ix = (head + ring.Length - 1 - newestBack) % ring.Length;
         return ring[ix];
     }
@@ -210,8 +202,7 @@ class VehicleReplay : HasPlayerLabelDraw {
         return Math::Clamp(gapEwmaMs * 2.5, 120.0, 500.0);
     }
 
-    // Interpolated state at render time. Returns false when no usable data
-    // (never received, or stale past the extrapolation cap).
+    // False when there's no usable data (never received, or stale past the cap).
     bool StateAt(uint64 localNowMs, VehicleInterpState@ outState) {
         if (count == 0) return false;
         double targetT = double(localNowMs) - offsetEstMs - DelayMs;
@@ -222,7 +213,7 @@ class VehicleReplay : HasPlayerLabelDraw {
             // underrun: extrapolate along velocity for a bounded window
             double dtMs = targetT - newestT;
             if (dtMs > 150.0) {
-                if (dtMs > 2000.0) return false; // long stale: hide/fade upstream
+                if (dtMs > 2000.0) return false; // long stale: caller hides the car
                 dtMs = 150.0;
             }
             FillFrom(newest, outState);
@@ -232,7 +223,7 @@ class VehicleReplay : HasPlayerLabelDraw {
             return true;
         }
 
-        // find bracketing pair a (older) .. b (newer) around targetT
+        // bracket targetT with a (older) .. b (newer)
         VehicleSample@ b = newest;
         for (uint back = 1; back < count; back++) {
             VehicleSample@ a = At(back);
@@ -300,8 +291,7 @@ class VehicleReplay : HasPlayerLabelDraw {
         o.left = Math::Cross(u, d);
     }
 
-    // NVG label at the interpolated position; replaces the exp-smoothing hack
-    // (the replay buffer IS the smoothing).
+    // NVG label at the interpolated position (the replay buffer is the smoothing).
     void RenderNvg(const string &in name, uint64 localNowMs) {
         auto @st = g_vsInterpScratch;
         if (!StateAt(localNowMs, st)) return;
@@ -312,6 +302,5 @@ class VehicleReplay : HasPlayerLabelDraw {
     }
 }
 
-// shared per-frame scratch for label rendering (interp results are consumed
-// immediately; never retained across players/frames)
+// shared scratch: interp results are consumed immediately, never retained
 VehicleInterpState@ g_vsInterpScratch = VehicleInterpState();
